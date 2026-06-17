@@ -22,7 +22,7 @@ class User(Base):
 
     # Relationships
     eligibilities: Mapped[list["Eligibility"]] = relationship("Eligibility", back_populates="user", cascade="all, delete-orphan")
-    unavailabilities: Mapped[list["Unavailability"]] = relationship("Unavailability", back_populates="user", cascade="all, delete-orphan")
+    unavailabilities: Mapped[list["Unavailability"]] = relationship("Unavailability", foreign_keys="[Unavailability.user_id]", back_populates="user", cascade="all, delete-orphan")
     preferences: Mapped[list["UserPreference"]] = relationship("UserPreference", back_populates="user", cascade="all, delete-orphan")
     assignments: Mapped[list["Assignment"]] = relationship("Assignment", back_populates="user")
     historical_balances: Mapped[list["HistoricalBalance"]] = relationship("HistoricalBalance", back_populates="user", cascade="all, delete-orphan")
