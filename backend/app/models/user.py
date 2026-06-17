@@ -26,7 +26,7 @@ class User(Base):
     preferences: Mapped[list["UserPreference"]] = relationship("UserPreference", back_populates="user", cascade="all, delete-orphan")
     assignments: Mapped[list["Assignment"]] = relationship("Assignment", back_populates="user")
     historical_balances: Mapped[list["HistoricalBalance"]] = relationship("HistoricalBalance", back_populates="user", cascade="all, delete-orphan")
-    profile_exceptions: Mapped[list["UserProfileException"]] = relationship("UserProfileException", back_populates="user", cascade="all, delete-orphan")
+    profile_exceptions: Mapped[list["UserProfileException"]] = relationship("UserProfileException", foreign_keys="[UserProfileException.user_id]", back_populates="user", cascade="all, delete-orphan")
     exchanges_as_requester: Mapped[list["Exchange"]] = relationship("Exchange", foreign_keys="Exchange.requester_id", back_populates="requester")
     exchanges_as_target: Mapped[list["Exchange"]] = relationship("Exchange", foreign_keys="Exchange.target_id", back_populates="target")
 
