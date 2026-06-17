@@ -33,7 +33,7 @@ class UserOut(BaseModel):
 
 class UserPasswordChange(BaseModel):
     current_password: str
-    new_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=1)
 
 
 class Token(BaseModel):
@@ -42,5 +42,5 @@ class Token(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str  # aceita qualquer identificador (email ou username simples)
     password: str
