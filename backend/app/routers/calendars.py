@@ -102,23 +102,51 @@ def apply_default_template(
     db: Session = Depends(get_db),
     manager: User = Depends(get_current_manager),
 ):
-    """Aplica template padrão: 1 vaga por tipo ativo em cada dia útil e fim de semana."""
+    """Aplica template padrão por categoria de dia:
+    - Dia útil:      1× Plantão 12h, 1× Reserva Manhã, 1× Reserva Tarde, 1× Pátio Manhã, 1× Pátio Tarde
+    - Fim de semana: 1× Plantão 12h, 1× Reserva 12h
+    - Feriado:       mesmo que fim de semana
+    """
     cal = _get_calendar_or_404(calendar_id, db)
-    tipos_ativos = db.query(ScheduleType).filter(ScheduleType.is_active == True).all()
+    tipos = {t.name: t for t in db.query(ScheduleType).filter(ScheduleType.is_active == True).all()}
 
-    if not tipos_ativos:
+    if not tipos:
         raise HTTPException(status_code=400, detail="Nenhum tipo de escala ativo cadastrado")
+
+    # Cobertura por categoria: {nome_tipo: quantidade}
+    cobertura_util = {
+        "Plantão 12h":   1,
+        "Reserva Manhã": 1,
+        "Reserva Tarde": 1,
+        "Reserva 12h":   0,
+        "Pátio Manhã":   1,
+        "Pátio Tarde":   1,
+    }
+    cobertura_fds = {
+        "Plantão 12h":   1,
+        "Reserva Manhã": 0,
+        "Reserva Tarde": 0,
+        "Reserva 12h":   1,
+        "Pátio Manhã":   0,
+        "Pátio Tarde":   0,
+    }
 
     dias_atualizados = 0
     for day in cal.days:
+        template = cobertura_util if day.category == DayCategory.WORKDAY else cobertura_fds
         coberturas_existentes = {c.schedule_type_id: c for c in day.coverages}
-        for tipo in tipos_ativos:
-            if tipo.id not in coberturas_existentes:
+        for nome, qtd in template.items():
+            if nome not in tipos:
+                continue
+            tipo_id = tipos[nome].id
+            if tipo_id in coberturas_existentes:
+                coberturas_existentes[tipo_id].quantity = qtd
+            else:
                 day.coverages.append(DayCoverage(
                     id=str(uuid.uuid4()),
                     day_id=day.id,
-                    schedule_type_id=tipo.id,
-                    quantity=1,
+                    schedule_type_id=tipo_id,
+                    quantity=qtd,
                 ))
         dias_atualizados += 1
 
