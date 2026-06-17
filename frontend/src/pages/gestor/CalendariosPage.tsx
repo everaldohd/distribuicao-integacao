@@ -29,7 +29,7 @@ export function CalendariosPage() {
   })
 
   const applyTemplate = useMutation({
-    mutationFn: (calendarId: string) => api.post(`/calendars/${calendarId}/coverage-template`),
+    mutationFn: (calendarId: string) => api.post(`/calendars/${calendarId}/apply-default-template`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['calendars'] }),
   })
 
@@ -94,11 +94,29 @@ export function CalendariosPage() {
               {calendars.map((cal) => (
                 <tr key={cal.id} className="hover:bg-gray-50">
                   <td className="px-6 py-3 font-medium">{MONTHS[cal.month - 1]} / {cal.year}</td>
-                  <td className="px-6 py-3"><Badge label={cal.status} color="blue" /></td>
                   <td className="px-6 py-3">
-                    <Button size="sm" variant="secondary" loading={applyTemplate.isPending} onClick={() => applyTemplate.mutate(cal.id)}>
-                      Aplicar template de cobertura
-                    </Button>
+                    <Badge
+                      label={cal.status === 'draft' ? '① Rascunho' : cal.status === 'open' ? '② Aberto' : '③ Bloqueado'}
+                      color={cal.status === 'draft' ? 'gray' : cal.status === 'open' ? 'green' : 'yellow'}
+                    />
+                  </td>
+                  <td className="px-6 py-3">
+                    {cal.status === 'draft' && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        loading={applyTemplate.isPending}
+                        onClick={() => applyTemplate.mutate(cal.id)}
+                      >
+                        Aplicar cobertura padrão →
+                      </Button>
+                    )}
+                    {cal.status === 'open' && (
+                      <span className="text-sm text-green-600 font-medium">Pronto para gerar escala</span>
+                    )}
+                    {cal.status === 'locked' && (
+                      <span className="text-sm text-gray-400">Escala publicada</span>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -96,6 +96,39 @@ def set_coverage_template(
     return {"message": f"Modelo aplicado a {len(days)} dias do tipo {data.category}"}
 
 
+@router.post("/{calendar_id}/apply-default-template", dependencies=[Depends(get_current_manager)])
+def apply_default_template(
+    calendar_id: str,
+    db: Session = Depends(get_db),
+    manager: User = Depends(get_current_manager),
+):
+    """Aplica template padrão: 1 vaga por tipo ativo em cada dia útil e fim de semana."""
+    cal = _get_calendar_or_404(calendar_id, db)
+    tipos_ativos = db.query(ScheduleType).filter(ScheduleType.is_active == True).all()
+
+    if not tipos_ativos:
+        raise HTTPException(status_code=400, detail="Nenhum tipo de escala ativo cadastrado")
+
+    dias_atualizados = 0
+    for day in cal.days:
+        coberturas_existentes = {c.schedule_type_id: c for c in day.coverages}
+        for tipo in tipos_ativos:
+            if tipo.id not in coberturas_existentes:
+                day.coverages.append(DayCoverage(
+                    id=str(uuid.uuid4()),
+                    day_id=day.id,
+                    schedule_type_id=tipo.id,
+                    quantity=1,
+                ))
+        dias_atualizados += 1
+
+    cal.status = CalendarStatus.OPEN
+    db.commit()
+    log_action(db, manager.id, AuditAction.UPDATE, "OperationalCalendar", cal.id,
+               description=f"Template padrão aplicado: {len(tipos_ativos)} tipos × {dias_atualizados} dias")
+    return {"message": f"Template aplicado: {len(tipos_ativos)} tipos em {dias_atualizados} dias. Status: OPEN"}
+
+
 @router.patch("/{calendar_id}/days/{day_id}")
 def override_day(
     calendar_id: str,
