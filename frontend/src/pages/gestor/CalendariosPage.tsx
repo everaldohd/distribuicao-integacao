@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import type { OperationalCalendar } from '../../lib/types'
 import { Card, CardHeader, CardBody } from '../../components/ui/Card'
@@ -10,6 +11,7 @@ import { Badge } from '../../components/ui/Badge'
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
 export function CalendariosPage() {
+  const navigate = useNavigate()
   const qc = useQueryClient()
   const currentYear = new Date().getFullYear()
   const [form, setForm] = useState({ year: currentYear, month: new Date().getMonth() + 1 })
@@ -101,22 +103,25 @@ export function CalendariosPage() {
                     />
                   </td>
                   <td className="px-6 py-3">
-                    {cal.status === 'draft' && (
+                    <div className="flex items-center gap-2">
                       <Button
                         size="sm"
                         variant="secondary"
-                        loading={applyTemplate.isPending}
-                        onClick={() => applyTemplate.mutate(cal.id)}
+                        onClick={() => navigate(`/gestor/calendarios/${cal.id}`)}
                       >
-                        Aplicar cobertura padrão →
+                        Configurar dias →
                       </Button>
-                    )}
-                    {cal.status === 'open' && (
-                      <span className="text-sm text-green-600 font-medium">Pronto para gerar escala</span>
-                    )}
-                    {cal.status === 'locked' && (
-                      <span className="text-sm text-gray-400">Escala publicada</span>
-                    )}
+                      {cal.status === 'draft' && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          loading={applyTemplate.isPending}
+                          onClick={() => applyTemplate.mutate(cal.id)}
+                        >
+                          Preencher padrão
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

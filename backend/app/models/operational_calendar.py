@@ -68,4 +68,8 @@ class DayCoverage(Base):
     original_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     day: Mapped["CalendarDay"] = relationship("CalendarDay", back_populates="coverages")
-    schedule_type: Mapped["ScheduleType"] = relationship("ScheduleType", back_populates="day_coverages")
+    schedule_type: Mapped["ScheduleType"] = relationship("ScheduleType", back_populates="day_coverages", lazy="joined")
+
+    @property
+    def schedule_type_name(self) -> str:
+        return self.schedule_type.name if self.schedule_type else ""

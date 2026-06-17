@@ -23,7 +23,8 @@ export interface Coverage {
   id: string
   schedule_type_id: string
   schedule_type_name: string
-  slots: number
+  quantity: number
+  slots: number  // alias de quantity para compatibilidade
 }
 
 export interface OperationalCalendar {

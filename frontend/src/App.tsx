@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage'
 import { UsuariosPage } from './pages/gestor/UsuariosPage'
 import { TiposEscalaPage } from './pages/gestor/TiposEscalaPage'
 import { CalendariosPage } from './pages/gestor/CalendariosPage'
+import { CalendarioDetalhePage } from './pages/gestor/CalendarioDetalhePage'
 import { EscalasPage } from './pages/gestor/EscalasPage'
 import { SaldoGestorPage } from './pages/gestor/SaldoGestorPage'
 import { MinhaEscalaPage } from './pages/usuario/MinhaEscalaPage'
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/gestor/usuarios" element={<UsuariosPage />} />
         <Route path="/gestor/tipos-escala" element={<TiposEscalaPage />} />
         <Route path="/gestor/calendarios" element={<CalendariosPage />} />
+        <Route path="/gestor/calendarios/:id" element={<CalendarioDetalhePage />} />
         <Route path="/gestor/escalas" element={<EscalasPage />} />
         <Route path="/gestor/saldo" element={<SaldoGestorPage />} />
 
