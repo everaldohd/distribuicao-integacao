@@ -37,6 +37,8 @@ export function UserDetailModal({ user, onClose }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] })
       qc.invalidateQueries({ queryKey: ['user-limits', user.id] })
+      // O perfil realinha as elegibilidades no backend — recarrega os checkboxes
+      qc.invalidateQueries({ queryKey: ['eligibilities', user.id] })
     },
   })
   function changeProfile(pid: string) {
@@ -61,6 +63,7 @@ export function UserDetailModal({ user, onClose }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] })
       qc.invalidateQueries({ queryKey: ['user-limits', user.id] })
+      qc.invalidateQueries({ queryKey: ['eligibilities', user.id] })
     },
   })
 

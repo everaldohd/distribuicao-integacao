@@ -112,6 +112,10 @@ def update_user(
     previous = {k: getattr(user, k) for k in changes}
     for field, value in changes.items():
         setattr(user, field, value)
+    db.flush()
+    # Trocar o perfil realinha as elegibilidades aos grupos do novo perfil
+    if "profile_id" in changes:
+        _sync_eligibilities_to_limits(db, user)
     db.commit()
     db.refresh(user)
     log_action(db, manager.id, AuditAction.UPDATE, "User", user.id,
@@ -300,6 +304,22 @@ def _effective_limits(db: Session, user: User) -> tuple[Profile | None, dict]:
     return profile, {g: base.get(g, 0) for g in groups}
 
 
+def _sync_eligibilities_to_limits(db: Session, user: User) -> None:
+    """Alinha as elegibilidades do perito aos grupos liberados pela cota efetiva:
+    habilita os tipos dos grupos com cota > 0 e desabilita os demais.
+    Mantém a consistência ao trocar de perfil/cotas. Não faz commit."""
+    _, limits = _effective_limits(db, user)
+    allowed_groups = {g for g, qty in limits.items() if qty > 0}
+    types = db.query(ScheduleType).filter(ScheduleType.is_active == True).all()
+    existing = {e.schedule_type_id: e for e in db.query(Eligibility).filter(Eligibility.user_id == user.id).all()}
+    for t in types:
+        should = (t.group_name or t.name) in allowed_groups
+        if t.id in existing:
+            existing[t.id].is_eligible = should
+        elif should:
+            db.add(Eligibility(id=str(uuid.uuid4()), user_id=user.id, schedule_type_id=t.id, is_eligible=True))
+
+
 @router.get("/{user_id}/limits", response_model=UserLimitsOut, dependencies=[Depends(get_current_manager)])
 def get_user_limits(user_id: str, db: Session = Depends(get_db)):
     user = _get_user_or_404(user_id, db)
@@ -331,6 +351,8 @@ def set_user_limits(user_id: str, data: UserLimitsSet, db: Session = Depends(get
             existing[group].max_quantity = qty
         else:
             db.add(UserGroupLimit(id=str(uuid.uuid4()), user_id=user_id, group_name=group, max_quantity=qty))
+    db.flush()
+    _sync_eligibilities_to_limits(db, user)  # realinha elegibilidades às novas cotas
     db.commit()
     db.refresh(user)
     profile, limits = _effective_limits(db, user)
