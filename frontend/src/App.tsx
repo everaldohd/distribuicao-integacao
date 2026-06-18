@@ -6,6 +6,7 @@ import { UsuariosPage } from './pages/gestor/UsuariosPage'
 import { TiposEscalaPage } from './pages/gestor/TiposEscalaPage'
 import { CalendariosPage } from './pages/gestor/CalendariosPage'
 import { PerfisPage } from './pages/gestor/PerfisPage'
+import { AuditoriaPage } from './pages/gestor/AuditoriaPage'
 import { CalendarioDetalhePage } from './pages/gestor/CalendarioDetalhePage'
 import { EscalasPage } from './pages/gestor/EscalasPage'
 import { EscalaDetalhePage } from './pages/gestor/EscalaDetalhePage'
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/gestor/escalas" element={<EscalasPage />} />
         <Route path="/gestor/escalas/:id" element={<EscalaDetalhePage />} />
         <Route path="/gestor/saldo" element={<SaldoGestorPage />} />
+        <Route path="/gestor/auditoria" element={<AuditoriaPage />} />
 
         {/* Usuário */}
         <Route path="/usuario/agenda" element={<MinhaAgendaPage />} />

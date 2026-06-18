@@ -12,6 +12,8 @@ from app.models.operational_calendar import OperationalCalendar
 from app.models.historical_balance import BalanceConfig
 from app.models.user import User
 from app.routers.deps import get_current_user, get_current_manager
+from app.services.audit import log_action
+from app.models.audit import AuditAction
 import uuid
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
@@ -172,6 +174,9 @@ def add_preference(data: PreferenceCreate, current_user: User = Depends(get_curr
     db.add(pref)
     db.commit()
     db.refresh(pref)
+    log_action(db, current_user.id, AuditAction.CREATE, "UserPreference", pref.id,
+               new_value={"date": str(data.date), "tipo": stype.name, "preferencia": data.type.value},
+               description=f"Preferência: {data.type.value} {stype.name} em {data.date}")
     return pref
 
 
@@ -180,8 +185,11 @@ def delete_preference(pref_id: str, current_user: User = Depends(get_current_use
     pref = db.get(UserPreference, pref_id)
     if not pref or pref.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Preferência não encontrada")
+    previous = {"date": str(pref.date), "preferencia": pref.type.value}
     db.delete(pref)
     db.commit()
+    log_action(db, current_user.id, AuditAction.DELETE, "UserPreference", pref_id,
+               previous_value=previous, description="Preferência removida")
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.database import get_db
 from app.models.exchange import Exchange, ExchangeType, ExchangeStatus
 from app.models.schedule import Assignment
@@ -106,7 +106,7 @@ def accept_exchange(
     exchange.target_assignment_id = data.target_assignment_id
     exchange.status = ExchangeStatus.ACCEPTED
     exchange.validation_passed = True
-    exchange.resolved_at = datetime.utcnow()
+    exchange.resolved_at = datetime.now(timezone.utc)
 
     db.commit()
     notify_exchange.delay(exchange.id, "accepted")
@@ -123,7 +123,7 @@ def reject_exchange(
     if not exchange or exchange.target_id != current_user.id:
         raise HTTPException(status_code=400, detail="Troca não encontrada")
     exchange.status = ExchangeStatus.REJECTED
-    exchange.resolved_at = datetime.utcnow()
+    exchange.resolved_at = datetime.now(timezone.utc)
     db.commit()
     notify_exchange.delay(exchange.id, "rejected")
     return {"message": "Troca recusada"}

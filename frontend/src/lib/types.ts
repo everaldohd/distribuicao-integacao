@@ -133,6 +133,19 @@ export interface LeaderboardEntry {
   cumulative_balance: number
 }
 
+export interface AuditEntry {
+  id: string
+  performed_by_id: string | null
+  performed_by_name: string | null
+  action: string
+  entity_type: string
+  entity_id: string | null
+  previous_value: Record<string, unknown> | null
+  new_value: Record<string, unknown> | null
+  description: string | null
+  created_at: string
+}
+
 export type PreferenceType = 'desired' | 'avoid'
 
 export interface Preference {

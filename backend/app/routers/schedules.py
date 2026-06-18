@@ -10,8 +10,10 @@ from app.routers.deps import get_current_manager, get_current_user
 from app.services.audit import log_action
 from app.models.audit import AuditAction
 from app.workers.tasks import run_solver_task
+from app.core.logging import get_logger
 import uuid
 
+logger = get_logger(__name__)
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
 
@@ -66,6 +68,8 @@ def generate(
     db.commit()
 
     run_solver_task.delay(schedule.id, manager.id)
+    logger.info("Geração enfileirada: escala %s (%d/%d v%d) por %s",
+                schedule.id, cal.year, cal.month, schedule.version, manager.email)
     log_action(db, manager.id, AuditAction.GENERATE, "Schedule", schedule.id, description="Geração iniciada")
     return {"schedule_id": schedule.id, "message": "Geração enfileirada"}
 
@@ -88,6 +92,7 @@ def delete_schedule(
     db.query(Assignment).filter(Assignment.schedule_id == schedule_id).delete(synchronize_session=False)
     db.delete(s)
     db.commit()
+    logger.info("Escala apagada: %s (%d/%d v%d) por %s", schedule_id, s.year, s.month, s.version, manager.email)
     log_action(db, manager.id, AuditAction.DELETE, "Schedule", schedule_id, description="Escala em preparação apagada")
 
 
@@ -97,7 +102,7 @@ def publish(
     db: Session = Depends(get_db),
     manager: User = Depends(get_current_manager),
 ):
-    from datetime import datetime
+    from datetime import datetime, timezone
     s = db.get(Schedule, schedule_id)
     if not s:
         raise HTTPException(status_code=404, detail="Escala não encontrada")
@@ -105,7 +110,7 @@ def publish(
         raise HTTPException(status_code=400, detail="Apenas escalas geradas podem ser publicadas")
 
     s.status = ScheduleStatus.PUBLISHED
-    s.published_at = datetime.utcnow()
+    s.published_at = datetime.now(timezone.utc)
     s.published_by_id = manager.id
 
     # Finaliza o calendário do mês (Aberto → Finalizado)
@@ -115,6 +120,8 @@ def publish(
         cal.status = CalendarStatus.LOCKED
 
     db.commit()
+    logger.info("Escala publicada: %s (%d/%d v%d) por %s; calendário finalizado",
+                schedule_id, s.year, s.month, s.version, manager.email)
 
     # Disparar e-mails e calcular saldo em background
     from app.workers.tasks import post_publish_tasks

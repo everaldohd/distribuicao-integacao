@@ -14,6 +14,7 @@ const managerLinks = [
   { to: '/gestor/calendarios', label: 'Calendários' },
   { to: '/gestor/escalas', label: 'Escalas' },
   { to: '/gestor/saldo', label: 'Saldo / Ranking' },
+  { to: '/gestor/auditoria', label: 'Auditoria' },
 ]
 
 const userLinks = [

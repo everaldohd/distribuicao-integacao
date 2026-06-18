@@ -7,9 +7,11 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import verify_password, create_access_token, hash_password
+from app.core.logging import get_logger
 from app.models.user import User
 from app.schemas.user import LoginRequest, Token
 
+logger = get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -17,7 +19,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def login(data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email, User.is_active == True).first()
     if not user or not verify_password(data.password, user.hashed_password):
+        # Log de falha de login (segurança) — não revela se o usuário existe
+        logger.warning("Falha de login para identificador '%s'", data.email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
+    logger.info("Login bem-sucedido: %s (gestor=%s)", user.email, user.is_manager)
     token = create_access_token(subject=user.id)
     return Token(access_token=token)
 

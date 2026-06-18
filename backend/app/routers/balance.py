@@ -118,4 +118,8 @@ def update_config(
         cfg.updated_by_id = manager.id
     db.commit()
     db.refresh(cfg)
+    from app.services.audit import log_action
+    from app.models.audit import AuditAction
+    log_action(db, manager.id, AuditAction.UPDATE, "BalanceConfig", cfg.id,
+               new_value=data.model_dump(), description="Configuração de saldo atualizada")
     return cfg

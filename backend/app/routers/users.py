@@ -14,6 +14,8 @@ from app.models.profile import Profile, ProfileGroupLimit, UserGroupLimit
 from app.schemas.user import UserCreate, UserUpdate, UserOut, UserPasswordChange
 from app.routers.deps import get_current_user, get_current_manager
 from app.services.balance import compute_new_user_initial_balance
+from app.services.audit import log_action
+from app.models.audit import AuditAction
 import uuid
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -60,6 +62,7 @@ def create_user(
         id=str(uuid.uuid4()),
         name=data.name,
         email=data.email,
+        matricula=data.matricula,
         hashed_password=hash_password(data.password),
         is_manager=data.is_manager,
         profile_id=data.profile_id,
@@ -80,6 +83,9 @@ def create_user(
 
     db.commit()
     db.refresh(user)
+    log_action(db, manager.id, AuditAction.CREATE, "User", user.id,
+               new_value={"name": user.name, "email": user.email, "is_manager": user.is_manager},
+               description=f"Usuário criado: {user.name}")
     return user
 
 
@@ -101,10 +107,15 @@ def update_user(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    for field, value in data.model_dump(exclude_none=True).items():
+    changes = data.model_dump(exclude_none=True)
+    previous = {k: getattr(user, k) for k in changes}
+    for field, value in changes.items():
         setattr(user, field, value)
     db.commit()
     db.refresh(user)
+    log_action(db, manager.id, AuditAction.UPDATE, "User", user.id,
+               previous_value=previous, new_value=changes,
+               description=f"Usuário atualizado: {user.name}")
     return user
 
 
@@ -151,9 +162,10 @@ def get_eligibilities(user_id: str, db: Session = Depends(get_db)):
     ]
 
 
-@router.put("/{user_id}/eligibilities", dependencies=[Depends(get_current_manager)])
-def set_eligibilities(user_id: str, data: EligibilitySet, db: Session = Depends(get_db)):
-    _get_user_or_404(user_id, db)
+@router.put("/{user_id}/eligibilities")
+def set_eligibilities(user_id: str, data: EligibilitySet, db: Session = Depends(get_db),
+                      manager: User = Depends(get_current_manager)):
+    user = _get_user_or_404(user_id, db)
     wanted = set(data.eligible_type_ids)
     existing = {e.schedule_type_id: e for e in db.query(Eligibility).filter(Eligibility.user_id == user_id).all()}
 
@@ -169,6 +181,9 @@ def set_eligibilities(user_id: str, data: EligibilitySet, db: Session = Depends(
             e.is_eligible = False
 
     db.commit()
+    log_action(db, manager.id, AuditAction.UPDATE, "Eligibility", user_id,
+               new_value={"eligible_type_ids": list(wanted)},
+               description=f"Elegibilidades de {user.name}: {len(wanted)} tipo(s)")
     return {"message": f"Elegibilidades atualizadas: {len(wanted)} tipo(s) habilitado(s)"}
 
 
@@ -223,17 +238,23 @@ def add_unavailability(
     db.add(unav)
     db.commit()
     db.refresh(unav)
+    log_action(db, manager.id, AuditAction.CREATE, "Unavailability", unav.id,
+               new_value={"type": unav.type.value, "start": str(unav.start_date), "end": str(unav.end_date)},
+               description=f"{unav.type.value} de {data.start_date} a {data.end_date}")
     return unav
 
 
-@router.delete("/{user_id}/unavailabilities/{unav_id}", status_code=204,
-               dependencies=[Depends(get_current_manager)])
-def delete_unavailability(user_id: str, unav_id: str, db: Session = Depends(get_db)):
+@router.delete("/{user_id}/unavailabilities/{unav_id}", status_code=204)
+def delete_unavailability(user_id: str, unav_id: str, db: Session = Depends(get_db),
+                          manager: User = Depends(get_current_manager)):
     unav = db.get(Unavailability, unav_id)
     if not unav or unav.user_id != user_id:
         raise HTTPException(status_code=404, detail="Indisponibilidade não encontrada")
+    previous = {"type": unav.type.value, "start": str(unav.start_date), "end": str(unav.end_date)}
     db.delete(unav)
     db.commit()
+    log_action(db, manager.id, AuditAction.DELETE, "Unavailability", unav_id,
+               previous_value=previous, description="Indisponibilidade removida")
 
 
 # ---------------------------------------------------------------------------
@@ -312,6 +333,9 @@ def set_user_limits(user_id: str, data: UserLimitsSet, db: Session = Depends(get
     db.commit()
     db.refresh(user)
     profile, limits = _effective_limits(db, user)
+    log_action(db, manager.id, AuditAction.UPDATE, "UserGroupLimit", user_id,
+               new_value={"limits": dict(data.limits)},
+               description=f"Cotas individuais de {user.name} (→ Personalizado)")
     return UserLimitsOut(
         profile_id=profile.id if profile else None,
         profile_name=profile.name if profile else "—",

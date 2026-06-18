@@ -6,6 +6,8 @@ from app.core.database import get_db
 from app.models.profile import Profile, ProfileGroupLimit
 from app.models.schedule_type import ScheduleType
 from app.routers.deps import get_current_user, get_current_manager
+from app.services.audit import log_action
+from app.models.audit import AuditAction
 import uuid
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
@@ -97,6 +99,9 @@ def create_profile(data: ProfileWrite, db: Session = Depends(get_db), manager=De
     _set_limits(db, profile, data.limits)
     db.commit()
     db.refresh(profile)
+    log_action(db, manager.id, AuditAction.CREATE, "Profile", profile.id,
+               new_value={"name": profile.name, "limits": dict(data.limits)},
+               description=f"Perfil criado: {profile.name}")
     return profile
 
 
@@ -112,6 +117,9 @@ def update_profile(profile_id: str, data: ProfileWrite, db: Session = Depends(ge
     _set_limits(db, profile, data.limits)
     db.commit()
     db.refresh(profile)
+    log_action(db, manager.id, AuditAction.UPDATE, "Profile", profile.id,
+               new_value={"name": profile.name, "limits": dict(data.limits)},
+               description=f"Perfil atualizado: {profile.name}")
     return profile
 
 
@@ -125,5 +133,8 @@ def delete_profile(profile_id: str, db: Session = Depends(get_db), manager=Depen
     # Peritos que usavam este perfil ficam sem perfil (caem no padrão)
     from app.models.user import User
     db.query(User).filter(User.profile_id == profile_id).update({User.profile_id: None})
+    nome = profile.name
     db.delete(profile)
     db.commit()
+    log_action(db, manager.id, AuditAction.DELETE, "Profile", profile_id,
+               previous_value={"name": nome}, description=f"Perfil excluído: {nome}")

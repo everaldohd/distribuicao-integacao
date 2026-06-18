@@ -281,6 +281,19 @@ Prefixo: `/api/v1`. Documentação interativa: `/docs`.
 | GET/PUT | `/preferences/config` | Misto | Fator do limite de preferências |
 | GET | `/balance/me` · `/balance/leaderboard` | Logado | Saldo pessoal / ranking |
 | GET/PUT | `/balance/config` | Misto | Valores do saldo |
+| GET | `/audit/` | Gestor | Trilha de auditoria (filtros por ação/entidade) |
+| GET | `/diagnostics/` | Gestor | Saúde do sistema (banco, Redis, Celery, seed) |
+| GET | `/health` | Público | Liveness simples |
+
+### Observabilidade
+- **Logs**: formato `timestamp | nível | módulo | mensagem` (stdout). Há *middleware* que loga
+  toda requisição (método, rota, status, tempo) e logs nos pontos críticos (login, geração,
+  publicação, exclusão de escala).
+- **Auditoria**: toda ação de admin (usuários, perfis, elegibilidades, cotas, férias, escalas) e
+  do perito (preferências) é gravada em `audit_logs` com autor, valores anterior/novo e descrição;
+  consultável em **Auditoria** (gestor). A geração da escala também grava `SolverAudit` (métricas da otimização).
+- **Testes**: `pytest` cobrindo auth, usuários, tipos, **solver (cota/interstício)**, **saldo** e
+  **limite de preferências**. Rode: `docker compose exec backend python -m pytest -q`.
 
 ---
 
