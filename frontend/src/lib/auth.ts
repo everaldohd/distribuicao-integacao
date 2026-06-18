@@ -14,6 +14,13 @@ export async function login(email: string, password: string): Promise<string> {
   return data.access_token
 }
 
+// Login delegado pelo NEO: troca o token de handoff pela sessão desta aplicação
+export async function ssoLogin(neoToken: string): Promise<string> {
+  const { data } = await api.post<{ access_token: string }>('/auth/sso', { token: neoToken })
+  localStorage.setItem('token', data.access_token)
+  return data.access_token
+}
+
 export async function getMe(): Promise<User> {
   const { data } = await api.get<User>('/users/me')
   return data

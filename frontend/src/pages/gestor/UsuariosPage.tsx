@@ -1,21 +1,29 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
-import type { User } from '../../lib/types'
+import type { User, Profile } from '../../lib/types'
 import { Card, CardHeader, CardBody } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Badge } from '../../components/ui/Badge'
+import { UserDetailModal } from './UserDetailModal'
 
 export function UsuariosPage() {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '', is_manager: false })
+  const [selected, setSelected] = useState<User | null>(null)
 
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: () => api.get('/users/').then((r) => r.data),
   })
+
+  const { data: profiles = [] } = useQuery<Profile[]>({
+    queryKey: ['profiles'],
+    queryFn: () => api.get('/profiles/').then((r) => r.data),
+  })
+  const profileName = (id: string | null) => profiles.find((p) => p.id === id)?.name ?? '—'
 
   const create = useMutation({
     mutationFn: (data: typeof form) => api.post('/users/', data),
@@ -72,17 +80,25 @@ export function UsuariosPage() {
                 <tr>
                   <th className="px-6 py-3 text-left">Nome</th>
                   <th className="px-6 py-3 text-left">E-mail</th>
+                  <th className="px-6 py-3 text-left">Perfil</th>
                   <th className="px-6 py-3 text-left">Papel</th>
+                  <th className="px-6 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-3 font-medium">{u.name}</td>
+                  <tr
+                    key={u.id}
+                    className="hover:bg-primary-50 cursor-pointer"
+                    onClick={() => setSelected(u)}
+                  >
+                    <td className="px-6 py-3 font-medium text-primary-700">{u.name}</td>
                     <td className="px-6 py-3 text-gray-500">{u.email}</td>
+                    <td className="px-6 py-3 text-gray-600">{u.is_manager ? '—' : profileName(u.profile_id)}</td>
                     <td className="px-6 py-3">
                       <Badge label={u.is_manager ? 'Gestor' : 'Usuário'} color={u.is_manager ? 'blue' : 'gray'} />
                     </td>
+                    <td className="px-6 py-3 text-right text-xs text-gray-400">Editar →</td>
                   </tr>
                 ))}
               </tbody>
@@ -90,6 +106,8 @@ export function UsuariosPage() {
           )}
         </div>
       </Card>
+
+      {selected && <UserDetailModal user={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }

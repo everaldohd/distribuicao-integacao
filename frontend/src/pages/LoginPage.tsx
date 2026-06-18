@@ -18,7 +18,7 @@ export function LoginPage() {
     try {
       await login(email, password)
       const user = await getMe()
-      navigate(user.is_manager ? '/gestor/usuarios' : '/usuario/escala')
+      navigate(user.is_manager ? '/gestor/usuarios' : '/usuario/agenda')
     } catch {
       setError('E-mail ou senha incorretos.')
     } finally {
@@ -37,11 +37,11 @@ export function LoginPage() {
         <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
           <Input
             id="email"
-            label="E-mail"
-            type="email"
+            label="Usuário"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+            autoComplete="username"
             required
           />
           <Input

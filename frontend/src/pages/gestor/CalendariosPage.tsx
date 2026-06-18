@@ -98,7 +98,7 @@ export function CalendariosPage() {
                   <td className="px-6 py-3 font-medium">{MONTHS[cal.month - 1]} / {cal.year}</td>
                   <td className="px-6 py-3">
                     <Badge
-                      label={cal.status === 'draft' ? '① Rascunho' : cal.status === 'open' ? '② Aberto' : '③ Bloqueado'}
+                      label={cal.status === 'draft' ? '① Rascunho' : cal.status === 'open' ? '② Aberto' : '③ Finalizado'}
                       color={cal.status === 'draft' ? 'gray' : cal.status === 'open' ? 'green' : 'yellow'}
                     />
                   </td>

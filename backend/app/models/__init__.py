@@ -1,6 +1,6 @@
 from .user import User
 from .schedule_type import ScheduleType
-from .profile import Profile, ProfileRule, UserProfileException
+from .profile import Profile, ProfileRule, UserProfileException, ProfileGroupLimit, UserGroupLimit
 from .eligibility import Eligibility
 from .operational_calendar import OperationalCalendar, DayCoverage
 from .unavailability import Unavailability
@@ -16,6 +16,8 @@ __all__ = [
     "Profile",
     "ProfileRule",
     "UserProfileException",
+    "ProfileGroupLimit",
+    "UserGroupLimit",
     "Eligibility",
     "OperationalCalendar",
     "DayCoverage",

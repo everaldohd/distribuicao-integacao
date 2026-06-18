@@ -57,5 +57,13 @@ class Assignment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     schedule: Mapped["Schedule"] = relationship("Schedule", back_populates="assignments")
-    user: Mapped["User | None"] = relationship("User", back_populates="assignments")
-    schedule_type: Mapped["ScheduleType"] = relationship("ScheduleType", back_populates="assignments")
+    user: Mapped["User | None"] = relationship("User", back_populates="assignments", lazy="joined")
+    schedule_type: Mapped["ScheduleType"] = relationship("ScheduleType", back_populates="assignments", lazy="joined")
+
+    @property
+    def user_name(self) -> str | None:
+        return self.user.name if self.user else None
+
+    @property
+    def schedule_type_name(self) -> str:
+        return self.schedule_type.name if self.schedule_type else ""

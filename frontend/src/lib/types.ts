@@ -12,6 +12,54 @@ export interface ScheduleType {
   requires_rest_day_after: boolean
 }
 
+export interface GroupLimit {
+  group_name: string
+  max_quantity: number
+}
+
+export interface Profile {
+  id: string
+  name: string
+  description: string | null
+  is_default: boolean
+  is_custom: boolean
+  is_system: boolean
+  group_limits: GroupLimit[]
+}
+
+export interface GroupType {
+  name: string
+  weight: number
+}
+
+export interface ScheduleGroup {
+  group_name: string
+  types: GroupType[]
+}
+
+export interface UserLimits {
+  profile_id: string | null
+  profile_name: string
+  is_custom: boolean
+  limits: Record<string, number>
+}
+
+export interface EligibilityItem {
+  schedule_type_id: string
+  schedule_type_name: string
+  is_eligible: boolean
+}
+
+export type UnavailabilityType = 'vacation' | 'bonus_leave' | 'license'
+
+export interface Unavailability {
+  id: string
+  type: UnavailabilityType
+  start_date: string
+  end_date: string
+  notes: string | null
+}
+
 export interface CalendarDay {
   id: string
   date: string
@@ -43,14 +91,19 @@ export interface Assignment {
   schedule_type_id: string
   schedule_type_name: string
   is_gap: boolean
+  is_manual?: boolean
 }
+
+export type ScheduleStatus = 'draft' | 'simulated' | 'generated' | 'published' | 'archived'
 
 export interface Schedule {
   id: string
-  calendar_id: string
-  status: 'DRAFT' | 'GENERATED' | 'PUBLISHED'
+  year: number
+  month: number
+  status: ScheduleStatus
   version: number
   created_at: string
+  published_at: string | null
   assignments: Assignment[]
 }
 
@@ -80,9 +133,28 @@ export interface LeaderboardEntry {
   cumulative_balance: number
 }
 
+export type PreferenceType = 'desired' | 'avoid'
+
 export interface Preference {
   id: string
+  year: number
+  month: number
   date: string
-  type: 'DESIRED' | 'AVOID'
-  calendar_id: string
+  schedule_type_id: string | null
+  type: PreferenceType
+}
+
+export interface Modality {
+  schedule_type_id: string
+  name: string
+  group_name: string
+}
+
+export interface PreferenceOptions {
+  factor: number
+  modalities: Modality[]
+  group_caps: Record<string, number>
+  availability: Record<string, string[]>
+  preferences: Preference[]
+  calendar_open: boolean
 }

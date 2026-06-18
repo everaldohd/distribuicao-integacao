@@ -16,6 +16,10 @@ class ScheduleType(Base):
     requires_rest_day_after: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Grupo de cota (Plantão / Reserva / Pátio) e peso dentro do grupo
+    # (Reserva 12h conta como 2 reservas, por isso group_weight = 2)
+    group_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    group_weight: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

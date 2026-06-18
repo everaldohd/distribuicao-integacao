@@ -70,17 +70,21 @@ def compute_and_persist_monthly_balances(db: Session, schedule_id: str):
         .all()
     )
 
-    # Preferências do mês
+    # Preferências do mês (casadas por modalidade quando há schedule_type_id)
     prefs = db.query(UserPreference).filter(
         UserPreference.year == year, UserPreference.month == month
     ).all()
-    desired_by_user: dict[str, set[date]] = {}
-    avoid_by_user: dict[str, set[date]] = {}
+    desired_by_user: dict[str, set] = {}   # (date, type_id) ou date (genérica)
+    avoid_by_user: dict[str, set] = {}
     for p in prefs:
+        key = (p.date, p.schedule_type_id) if p.schedule_type_id else p.date
         if p.type == PreferenceType.DESIRED:
-            desired_by_user.setdefault(p.user_id, set()).add(p.date)
+            desired_by_user.setdefault(p.user_id, set()).add(key)
         else:
-            avoid_by_user.setdefault(p.user_id, set()).add(p.date)
+            avoid_by_user.setdefault(p.user_id, set()).add(key)
+
+    def _matches(prefset: set, a) -> bool:
+        return (a.date, a.schedule_type_id) in prefset or a.date in prefset
 
     # Calcular eventos por usuário
     events: dict[str, dict] = {}
@@ -89,18 +93,27 @@ def compute_and_persist_monthly_balances(db: Session, schedule_id: str):
         ev = events.setdefault(uid, {
             "no_schedule": 0, "desired": 0, "avoided": 0, "common": 0
         })
-        if a.date in desired_by_user.get(uid, set()):
+        if _matches(desired_by_user.get(uid, set()), a):
             ev["desired"] += 1
-        elif a.date in avoid_by_user.get(uid, set()):
+        elif _matches(avoid_by_user.get(uid, set()), a):
             ev["avoided"] += 1
         else:
             ev["common"] += 1
 
-    # Usuários ativos sem nenhuma escala no mês
+    # Usuários "escaláveis": têm ao menos uma elegibilidade ativa.
+    # Quem não pode ser escalado (sem nenhuma elegibilidade) fica com saldo IMUTÁVEL —
+    # não recebe a penalidade de mês sem escala nem entra na normalização.
+    from app.models.eligibility import Eligibility
+    eligible_user_ids = {
+        e.user_id for e in db.query(Eligibility.user_id)
+        .filter(Eligibility.is_eligible == True).all()
+    }
+
+    # Usuários ativos sem escala no mês, mas que PODERIAM ser escalados → penalidade de ausência
     active_users = db.query(User).filter(User.is_active == True).all()
     assigned_user_ids = {a.user_id for a in assignments}
     for user in active_users:
-        if user.id not in assigned_user_ids:
+        if user.id not in assigned_user_ids and user.id in eligible_user_ids:
             events[user.id] = {"no_schedule": 1, "desired": 0, "avoided": 0, "common": 0}
 
     # Calcular deltas e saldo acumulado

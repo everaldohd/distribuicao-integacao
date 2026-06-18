@@ -12,16 +12,21 @@ class PreferenceType(str, PyEnum):
 
 
 class UserPreference(Base):
-    """Preferências de datas informadas pelo usuário antes da geração da escala."""
+    """Preferência de uma MODALIDADE (tipo de escala) numa data, informada pelo perito."""
     __tablename__ = "user_preferences"
-    __table_args__ = (UniqueConstraint("user_id", "year", "month", "date", "type", name="uq_user_preference"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "year", "month", "date", "schedule_type_id", "type", name="uq_user_preference"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     month: Mapped[int] = mapped_column(Integer, nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False)
+    # Tipo de escala (modalidade) da preferência. Nulo = preferência genérica (modelo antigo).
+    schedule_type_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("schedule_types.id"), nullable=True)
     type: Mapped[PreferenceType] = mapped_column(Enum(PreferenceType), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship("User", back_populates="preferences")
+    schedule_type: Mapped["ScheduleType | None"] = relationship("ScheduleType")

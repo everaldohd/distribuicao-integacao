@@ -23,6 +23,53 @@ def _get_calendar_or_404(calendar_id: str, db: Session) -> OperationalCalendar:
     return cal
 
 
+# Cobertura padrão por categoria de dia: {nome_tipo: quantidade}
+COBERTURA_UTIL = {
+    "Plantão 12h":   1,
+    "Reserva Manhã": 1,
+    "Reserva Tarde": 1,
+    "Reserva 12h":   0,
+    "Pátio Manhã":   1,
+    "Pátio Tarde":   1,
+}
+COBERTURA_FDS = {
+    "Plantão 12h":   1,
+    "Reserva Manhã": 0,
+    "Reserva Tarde": 0,
+    "Reserva 12h":   1,
+    "Pátio Manhã":   0,
+    "Pátio Tarde":   0,
+}
+
+
+def _apply_default_coverage(cal: OperationalCalendar, db: Session) -> int:
+    """Aplica a cobertura padrão (dia útil x fim de semana) a todos os dias do calendário.
+    Retorna a quantidade de dias atualizados. Não faz commit."""
+    tipos = {t.name: t for t in db.query(ScheduleType).filter(ScheduleType.is_active == True).all()}
+    if not tipos:
+        raise HTTPException(status_code=400, detail="Nenhum tipo de escala ativo cadastrado")
+
+    dias_atualizados = 0
+    for day in cal.days:
+        template = COBERTURA_UTIL if day.category == DayCategory.WORKDAY else COBERTURA_FDS
+        coberturas_existentes = {c.schedule_type_id: c for c in day.coverages}
+        for nome, qtd in template.items():
+            if nome not in tipos:
+                continue
+            tipo_id = tipos[nome].id
+            if tipo_id in coberturas_existentes:
+                coberturas_existentes[tipo_id].quantity = qtd
+            else:
+                day.coverages.append(DayCoverage(
+                    id=str(uuid.uuid4()),
+                    day_id=day.id,
+                    schedule_type_id=tipo_id,
+                    quantity=qtd,
+                ))
+        dias_atualizados += 1
+    return dias_atualizados
+
+
 @router.get("/", response_model=List[CalendarOut], dependencies=[Depends(get_current_user)])
 def list_calendars(db: Session = Depends(get_db)):
     return db.query(OperationalCalendar).order_by(OperationalCalendar.year.desc(), OperationalCalendar.month.desc()).all()
@@ -61,9 +108,16 @@ def create_calendar(
         cal_day = CalendarDay(id=str(uuid.uuid4()), calendar_id=cal.id, date=d, category=category)
         db.add(cal_day)
 
+    db.flush()
+    db.refresh(cal)
+
+    # Aplica cobertura padrão automaticamente e abre o calendário
+    _apply_default_coverage(cal, db)
+    cal.status = CalendarStatus.OPEN
+
     db.commit()
     db.refresh(cal)
-    log_action(db, manager.id, AuditAction.CREATE, "OperationalCalendar", cal.id, description=f"Calendário {data.year}/{data.month:02d} criado")
+    log_action(db, manager.id, AuditAction.CREATE, "OperationalCalendar", cal.id, description=f"Calendário {data.year}/{data.month:02d} criado com cobertura padrão")
     return cal
 
 
@@ -108,53 +162,12 @@ def apply_default_template(
     - Feriado:       mesmo que fim de semana
     """
     cal = _get_calendar_or_404(calendar_id, db)
-    tipos = {t.name: t for t in db.query(ScheduleType).filter(ScheduleType.is_active == True).all()}
-
-    if not tipos:
-        raise HTTPException(status_code=400, detail="Nenhum tipo de escala ativo cadastrado")
-
-    # Cobertura por categoria: {nome_tipo: quantidade}
-    cobertura_util = {
-        "Plantão 12h":   1,
-        "Reserva Manhã": 1,
-        "Reserva Tarde": 1,
-        "Reserva 12h":   0,
-        "Pátio Manhã":   1,
-        "Pátio Tarde":   1,
-    }
-    cobertura_fds = {
-        "Plantão 12h":   1,
-        "Reserva Manhã": 0,
-        "Reserva Tarde": 0,
-        "Reserva 12h":   1,
-        "Pátio Manhã":   0,
-        "Pátio Tarde":   0,
-    }
-
-    dias_atualizados = 0
-    for day in cal.days:
-        template = cobertura_util if day.category == DayCategory.WORKDAY else cobertura_fds
-        coberturas_existentes = {c.schedule_type_id: c for c in day.coverages}
-        for nome, qtd in template.items():
-            if nome not in tipos:
-                continue
-            tipo_id = tipos[nome].id
-            if tipo_id in coberturas_existentes:
-                coberturas_existentes[tipo_id].quantity = qtd
-            else:
-                day.coverages.append(DayCoverage(
-                    id=str(uuid.uuid4()),
-                    day_id=day.id,
-                    schedule_type_id=tipo_id,
-                    quantity=qtd,
-                ))
-        dias_atualizados += 1
-
+    dias_atualizados = _apply_default_coverage(cal, db)
     cal.status = CalendarStatus.OPEN
     db.commit()
     log_action(db, manager.id, AuditAction.UPDATE, "OperationalCalendar", cal.id,
-               description=f"Template padrão aplicado: {len(tipos_ativos)} tipos × {dias_atualizados} dias")
-    return {"message": f"Template aplicado: {len(tipos_ativos)} tipos em {dias_atualizados} dias. Status: OPEN"}
+               description=f"Template padrão aplicado a {dias_atualizados} dias")
+    return {"message": f"Template aplicado a {dias_atualizados} dias. Status: OPEN"}
 
 
 @router.patch("/{calendar_id}/days/{day_id}")

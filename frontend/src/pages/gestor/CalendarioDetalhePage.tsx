@@ -132,7 +132,7 @@ export function CalendarioDetalhePage() {
         </div>
         <div className="flex items-center gap-3">
           <Badge
-            label={calendar.status === 'draft' ? 'Rascunho' : calendar.status === 'open' ? 'Aberto' : 'Bloqueado'}
+            label={calendar.status === 'draft' ? 'Rascunho' : calendar.status === 'open' ? 'Aberto' : 'Finalizado'}
             color={calendar.status === 'draft' ? 'gray' : calendar.status === 'open' ? 'green' : 'yellow'}
           />
           {calendar.status === 'draft' && (

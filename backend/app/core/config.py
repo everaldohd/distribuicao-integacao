@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     FIRST_MANAGER_PASSWORD: str = "change-me"
     FIRST_MANAGER_NAME: str = "Administrador"
 
+    # Integração NEO (SSO): segredo compartilhado para validar o token de handoff.
+    # Vazio = SSO desativado (usa apenas login local). Defina para habilitar.
+    NEO_SSO_SECRET: str = ""
+    NEO_SSO_TOKEN_TTL_SECONDS: int = 120  # tolerância de validade do token vindo do NEO
+    # Cria automaticamente o perito na 1ª entrada via NEO se a matrícula não existir
+    NEO_SSO_AUTO_PROVISION: bool = True
+
     model_config = {"env_file": ".env", "case_sensitive": True}
 
 

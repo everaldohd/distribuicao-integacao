@@ -45,19 +45,44 @@ def seed():
             ))
             print("Usuário de teste criado: usuario / usuario")
 
-        # Tipos de escala iniciais
+        # Tipos de escala iniciais (com grupo de cota e peso)
         default_types = [
-            {"name": "Plantão 12h",   "requires_rest_day_after": True,  "display_order": 1},
-            {"name": "Reserva Manhã", "requires_rest_day_after": False, "display_order": 2},
-            {"name": "Reserva Tarde", "requires_rest_day_after": False, "display_order": 3},
-            {"name": "Reserva 12h",   "requires_rest_day_after": False, "display_order": 4},
-            {"name": "Pátio Manhã",   "requires_rest_day_after": False, "display_order": 5},
-            {"name": "Pátio Tarde",   "requires_rest_day_after": False, "display_order": 6},
+            {"name": "Plantão 12h",   "requires_rest_day_after": True,  "display_order": 1, "group_name": "Plantão", "group_weight": 1},
+            {"name": "Reserva Manhã", "requires_rest_day_after": False, "display_order": 2, "group_name": "Reserva", "group_weight": 1},
+            {"name": "Reserva Tarde", "requires_rest_day_after": False, "display_order": 3, "group_name": "Reserva", "group_weight": 1},
+            {"name": "Reserva 12h",   "requires_rest_day_after": False, "display_order": 4, "group_name": "Reserva", "group_weight": 2},
+            {"name": "Pátio Manhã",   "requires_rest_day_after": False, "display_order": 5, "group_name": "Pátio",   "group_weight": 1},
+            {"name": "Pátio Tarde",   "requires_rest_day_after": False, "display_order": 6, "group_name": "Pátio",   "group_weight": 1},
         ]
         for t in default_types:
-            if not db.query(ScheduleType).filter(ScheduleType.name == t["name"]).first():
+            existing_type = db.query(ScheduleType).filter(ScheduleType.name == t["name"]).first()
+            if not existing_type:
                 db.add(ScheduleType(id=str(uuid.uuid4()), **t))
                 print(f"Tipo criado: {t['name']}")
+            elif existing_type.group_name is None:
+                existing_type.group_name = t["group_name"]
+                existing_type.group_weight = t["group_weight"]
+
+        # Perfis do sistema (cria apenas se ausente — não sobrescreve limites já ajustados)
+        from app.models.profile import Profile, ProfileGroupLimit
+        system_profiles = [
+            ("Lotado na Interna",               {"Plantão": 1, "Reserva": 2, "Pátio": 0}, False, False),
+            ("Lotado na Interna com Restrição", {"Plantão": 0, "Reserva": 0, "Pátio": 1}, False, False),
+            ("Lotado na Externa",               {"Plantão": 0, "Reserva": 0, "Pátio": 0}, False, False),
+            ("Chefe",                           {"Plantão": 1, "Reserva": 2, "Pátio": 0}, False, False),
+            ("Direção",                         {"Plantão": 0, "Reserva": 0, "Pátio": 0}, False, False),
+            ("Fora do Integração",              {"Plantão": 0, "Reserva": 0, "Pátio": 0}, True,  False),
+            ("Personalizado",                   None,                                     False, True),
+        ]
+        for nome, limites, is_default, is_custom in system_profiles:
+            if not db.query(Profile).filter(Profile.name == nome).first():
+                p = Profile(id=str(uuid.uuid4()), name=nome, is_default=is_default, is_custom=is_custom, is_system=True)
+                db.add(p)
+                db.flush()
+                if limites:
+                    for grupo, lim in limites.items():
+                        db.add(ProfileGroupLimit(id=str(uuid.uuid4()), profile_id=p.id, group_name=grupo, max_quantity=lim))
+                print(f"Perfil criado: {nome}")
 
         # Configuração de saldo padrão
         if not db.query(BalanceConfig).first():

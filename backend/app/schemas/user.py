@@ -9,6 +9,7 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=8)
     is_manager: bool = False
     profile_id: Optional[str] = None
+    matricula: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -17,12 +18,14 @@ class UserUpdate(BaseModel):
     is_manager: Optional[bool] = None
     is_active: Optional[bool] = None
     profile_id: Optional[str] = None
+    matricula: Optional[str] = None
 
 
 class UserOut(BaseModel):
     id: str
     name: str
     email: str
+    matricula: Optional[str] = None
     is_manager: bool
     is_active: bool
     profile_id: Optional[str]

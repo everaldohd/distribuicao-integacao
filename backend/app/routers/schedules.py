@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 from app.core.database import get_db
 from app.models.schedule import Schedule, Assignment, ScheduleStatus
 from app.models.user import User
@@ -69,6 +70,27 @@ def generate(
     return {"schedule_id": schedule.id, "message": "Geração enfileirada"}
 
 
+@router.delete("/{schedule_id}", status_code=204)
+def delete_schedule(
+    schedule_id: str,
+    db: Session = Depends(get_db),
+    manager: User = Depends(get_current_manager),
+):
+    """Apaga uma escala em preparação (não publicada)."""
+    s = db.get(Schedule, schedule_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Escala não encontrada")
+    if s.status == ScheduleStatus.PUBLISHED:
+        raise HTTPException(status_code=400, detail="Escala publicada não pode ser apagada.")
+
+    from app.models.audit import SolverAudit
+    db.query(SolverAudit).filter(SolverAudit.schedule_id == schedule_id).delete(synchronize_session=False)
+    db.query(Assignment).filter(Assignment.schedule_id == schedule_id).delete(synchronize_session=False)
+    db.delete(s)
+    db.commit()
+    log_action(db, manager.id, AuditAction.DELETE, "Schedule", schedule_id, description="Escala em preparação apagada")
+
+
 @router.post("/{schedule_id}/publish")
 def publish(
     schedule_id: str,
@@ -85,6 +107,13 @@ def publish(
     s.status = ScheduleStatus.PUBLISHED
     s.published_at = datetime.utcnow()
     s.published_by_id = manager.id
+
+    # Finaliza o calendário do mês (Aberto → Finalizado)
+    from app.models.operational_calendar import OperationalCalendar, CalendarStatus
+    cal = db.get(OperationalCalendar, s.calendar_id)
+    if cal:
+        cal.status = CalendarStatus.LOCKED
+
     db.commit()
 
     # Disparar e-mails e calcular saldo em background
@@ -93,6 +122,66 @@ def publish(
 
     log_action(db, manager.id, AuditAction.PUBLISH, "Schedule", schedule_id)
     return {"message": "Escala publicada com sucesso"}
+
+
+class AssignmentEdit(BaseModel):
+    user_id: Optional[str] = None  # None => transforma a vaga em buraco
+    reason: Optional[str] = None   # justificativa (obrigatória após publicação)
+
+
+@router.patch("/{schedule_id}/assignments/{assignment_id}")
+def edit_assignment(
+    schedule_id: str,
+    assignment_id: str,
+    data: AssignmentEdit,
+    db: Session = Depends(get_db),
+    manager: User = Depends(get_current_manager),
+):
+    """Admin reatribui (ou esvazia) uma vaga. Após a publicação, exige justificativa."""
+    s = db.get(Schedule, schedule_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Escala não encontrada")
+    if s.status == ScheduleStatus.ARCHIVED:
+        raise HTTPException(status_code=400, detail="Escala arquivada não pode ser editada.")
+
+    is_published = s.status == ScheduleStatus.PUBLISHED
+    reason = (data.reason or "").strip()
+    if is_published and not reason:
+        raise HTTPException(status_code=400, detail="Justificativa é obrigatória para alterar uma escala publicada.")
+
+    a = db.get(Assignment, assignment_id)
+    if not a or a.schedule_id != schedule_id:
+        raise HTTPException(status_code=404, detail="Atribuição não encontrada")
+
+    anterior = a.user_id
+    if data.user_id:
+        novo = db.get(User, data.user_id)
+        if not novo:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        # Impede a mesma pessoa em dois turnos no mesmo dia
+        conflito = db.query(Assignment).filter(
+            Assignment.schedule_id == schedule_id,
+            Assignment.date == a.date,
+            Assignment.user_id == data.user_id,
+            Assignment.id != a.id,
+        ).first()
+        if conflito:
+            raise HTTPException(status_code=400, detail=f"{novo.name} já está escalado neste dia")
+        a.user_id = data.user_id
+        a.is_gap = False
+        a.is_manual = True
+        a.explanation_flags = {"manual": True, "reason": reason} if reason else {"manual": True}
+    else:
+        a.user_id = None
+        a.is_gap = True
+        a.is_manual = True
+        a.explanation_flags = {"manual": True, "gap": True, "reason": reason} if reason else {"manual": True, "gap": True}
+
+    db.commit()
+    desc = f"Reatribuição em {a.date}" + (f" (escala publicada) — {reason}" if is_published else "")
+    log_action(db, manager.id, AuditAction.MANUAL_FILL, "Assignment", assignment_id,
+               previous_value={"user_id": anterior}, description=desc)
+    return {"message": "Atribuição atualizada"}
 
 
 @router.post("/{schedule_id}/manual-fill")

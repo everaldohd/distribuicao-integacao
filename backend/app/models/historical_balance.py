@@ -40,5 +40,7 @@ class BalanceConfig(Base):
     desired_date_fulfilled: Mapped[int] = mapped_column(Integer, default=-5, nullable=False)
     common_schedule: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     avoided_date_assigned: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Fator multiplicador do limite de dias de preferência (limite = cota_grupo × fator)
+    preference_factor: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     updated_by_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

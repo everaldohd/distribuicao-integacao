@@ -48,7 +48,7 @@ from app.models.preference import UserPreference, PreferenceType
 from app.models.unavailability import Unavailability
 from app.models.historical_balance import HistoricalBalance
 from app.models.eligibility import Eligibility
-from app.models.profile import ProfileRule, UserProfileException
+from app.models.profile import Profile, ProfileGroupLimit, UserGroupLimit
 from app.models.audit import SolverAudit
 from app.schemas.schedule import SimulationResult
 
@@ -70,9 +70,12 @@ class _UserData:
     profile_id: Optional[str]
     eligible_type_ids: set = field(default_factory=set)
     unavailable_dates: set = field(default_factory=set)
-    desired_dates: set = field(default_factory=set)
-    avoid_dates: set = field(default_factory=set)
-    quota: dict = field(default_factory=dict)          # {type_id: max_qty}
+    # Preferências por modalidade: conjuntos de (date, type_id). *_any = preferências sem tipo.
+    desired_typed: set = field(default_factory=set)
+    avoid_typed: set = field(default_factory=set)
+    desired_any: set = field(default_factory=set)
+    avoid_any: set = field(default_factory=set)
+    group_limit: dict = field(default_factory=dict)    # {group_name: max_qty (ponderado)}
     balance: float = 0.0
     # Se fez Plantão 12h no último dia do mês anterior
     had_shift_last_day_prev_month: bool = False
@@ -115,6 +118,11 @@ class ScheduleSolver:
         self.type_ids = [t.id for t in self.schedule_types]
         self.type_by_id = {t.id: t for t in self.schedule_types}
 
+        # Grupos de cota (Plantão/Reserva/Pátio) e pesos por tipo
+        self.type_group = {t.id: (t.group_name or t.name) for t in self.schedule_types}
+        self.type_weight = {t.id: (t.group_weight or 1) for t in self.schedule_types}
+        self.all_groups = sorted({g for g in self.type_group.values()})
+
         # Dias do calendário ordenados
         self.days = sorted(self.calendar.days, key=lambda d: d.date)
 
@@ -156,32 +164,49 @@ class ScheduleSolver:
                 unavail_map.setdefault(uid, set()).add(d)
                 d += timedelta(days=1)
 
-        # Preferências do mês
+        # Preferências do mês (por modalidade quando schedule_type_id está definido)
         prefs = self.db.query(UserPreference).filter(
             UserPreference.year == self.year,
             UserPreference.month == self.month,
         ).all()
-        desired_map: dict[str, set[date]] = {}
-        avoid_map: dict[str, set[date]] = {}
+        desired_typed_map: dict[str, set] = {}
+        avoid_typed_map: dict[str, set] = {}
+        desired_any_map: dict[str, set[date]] = {}
+        avoid_any_map: dict[str, set[date]] = {}
         for p in prefs:
             if p.type == PreferenceType.DESIRED:
-                desired_map.setdefault(p.user_id, set()).add(p.date)
+                if p.schedule_type_id:
+                    desired_typed_map.setdefault(p.user_id, set()).add((p.date, p.schedule_type_id))
+                else:
+                    desired_any_map.setdefault(p.user_id, set()).add(p.date)
             else:
-                avoid_map.setdefault(p.user_id, set()).add(p.date)
+                if p.schedule_type_id:
+                    avoid_typed_map.setdefault(p.user_id, set()).add((p.date, p.schedule_type_id))
+                else:
+                    avoid_any_map.setdefault(p.user_id, set()).add(p.date)
 
-        # Cotas (perfil + exceções individuais)
-        profile_rules = self.db.query(ProfileRule).all()
-        rule_map: dict[str, dict[str, int]] = {}  # profile_id -> {type_id: qty}
-        for r in profile_rules:
-            rule_map.setdefault(r.profile_id, {})[r.schedule_type_id] = r.quantity
+        # Limites por GRUPO (Plantão/Reserva/Pátio): perfil fixo, perfil padrão ou individual
+        profile_group_limits: dict[str, dict[str, int]] = {}  # profile_id -> {group: max}
+        for gl in self.db.query(ProfileGroupLimit).all():
+            profile_group_limits.setdefault(gl.profile_id, {})[gl.group_name] = gl.max_quantity
 
-        exceptions = self.db.query(UserProfileException).filter(
-            UserProfileException.year == self.year,
-            UserProfileException.month == self.month,
-        ).all()
-        exception_map: dict[tuple[str, str], int] = {}  # (user_id, type_id) -> qty
-        for ex in exceptions:
-            exception_map[(ex.user_id, ex.schedule_type_id)] = ex.quantity
+        user_group_limits: dict[str, dict[str, int]] = {}  # user_id -> {group: max}
+        for ul in self.db.query(UserGroupLimit).all():
+            user_group_limits.setdefault(ul.user_id, {})[ul.group_name] = ul.max_quantity
+
+        all_profiles = self.db.query(Profile).all()
+        custom_profile_ids = {p.id for p in all_profiles if p.is_custom}
+        default_profile = next((p for p in all_profiles if p.is_default), None)
+        default_profile_id = default_profile.id if default_profile else None
+
+        def _limits_for(user: User) -> dict[str, int]:
+            pid = user.profile_id or default_profile_id
+            if pid in custom_profile_ids:
+                base = user_group_limits.get(user.id, {})
+            else:
+                base = profile_group_limits.get(pid, {})
+            # Grupos sem limite definido = 0 (mais restritivo)
+            return {g: base.get(g, 0) for g in self.all_groups}
 
         # Saldo histórico: último registro por usuário
         balances = (
@@ -201,24 +226,17 @@ class ScheduleSolver:
         rest_type_ids = {t.id for t in self.schedule_types if t.requires_rest_day_after}
 
         for user in active_users:
-            quota: dict[str, int] = {}
-            if user.profile_id and user.profile_id in rule_map:
-                quota = dict(rule_map[user.profile_id])
-            # Sobrescrever com exceções individuais
-            for type_id in self.type_ids:
-                key = (user.id, type_id)
-                if key in exception_map:
-                    quota[type_id] = exception_map[key]
-
             ud = _UserData(
                 id=user.id,
                 name=user.name,
                 profile_id=user.profile_id,
                 eligible_type_ids=elig_map.get(user.id, set()),
                 unavailable_dates=unavail_map.get(user.id, set()),
-                desired_dates=desired_map.get(user.id, set()),
-                avoid_dates=avoid_map.get(user.id, set()),
-                quota=quota,
+                desired_typed=desired_typed_map.get(user.id, set()),
+                avoid_typed=avoid_typed_map.get(user.id, set()),
+                desired_any=desired_any_map.get(user.id, set()),
+                avoid_any=avoid_any_map.get(user.id, set()),
+                group_limit=_limits_for(user),
                 balance=latest_balance.get(user.id, 0.0),
                 had_shift_last_day_prev_month=user.id in prev_plantao_users,
             )
@@ -282,8 +300,8 @@ class ScheduleSolver:
         n_eligible = len(eligible_users)
 
         # Estimativa de preferências
-        all_desired = sum(len(u.desired_dates) for u in self.users)
-        all_avoid = sum(len(u.avoid_dates) for u in self.users)
+        all_desired = sum(len(u.desired_typed) + len(u.desired_any) for u in self.users)
+        all_avoid = sum(len(u.avoid_typed) + len(u.avoid_any) for u in self.users)
 
         # Estimativa de gaps: dias sem usuários disponíveis suficientes
         gaps = 0
@@ -376,18 +394,18 @@ class ScheduleSolver:
             ]
             model.add(sum(assigned_vars) + gap[(d, t_id)] == qty)
 
-        # 4. Cotas do perfil por usuário e tipo
+        # 4. Limites por GRUPO (Plantão/Reserva/Pátio), ponderados (Reserva 12h = 2)
         for u in users:
-            for t_id in type_ids:
-                max_qty = u.quota.get(t_id)
-                if max_qty is not None:
-                    vars_type = [
-                        x[(u.id, d.date, t_id)]
-                        for d in days
-                        if (u.id, d.date, t_id) in x
-                    ]
-                    if vars_type:
-                        model.add(sum(vars_type) <= max_qty)
+            for group in self.all_groups:
+                max_qty = u.group_limit.get(group, 0)
+                terms = [
+                    self.type_weight[t_id] * x[(u.id, d.date, t_id)]
+                    for d in days
+                    for t_id in type_ids
+                    if self.type_group.get(t_id) == group and (u.id, d.date, t_id) in x
+                ]
+                if terms:
+                    model.add(sum(terms) <= max_qty)
 
         # 5. Interstício pós-Plantão 12h
         for u in users:
@@ -433,12 +451,17 @@ class ScheduleSolver:
                     if (u.id, day.date, t_id) not in x:
                         continue
                     v = x[(u.id, day.date, t_id)]
-                    if day.date in u.desired_dates:
+                    if (day.date, t_id) in u.desired_typed or day.date in u.desired_any:
                         objective_terms.append(WEIGHT_DESIRED * v)
-                    elif day.date in u.avoid_dates:
+                    elif (day.date, t_id) in u.avoid_typed or day.date in u.avoid_any:
                         objective_terms.append(-WEIGHT_AVOID * v)
 
-        # Priorizar usuários com maior saldo histórico
+        # Saldo histórico: convenção do sistema (ver config.py / services/balance.py):
+        #   saldo POSITIVO = perito prejudicado (foi escalado em datas a evitar, etc.) → deve ser
+        #   privilegiado, ou seja, escalado MENOS para retornar ao equilíbrio.
+        #   saldo NEGATIVO = perito que teve tratamento favorável → deve ser escalado MAIS.
+        # Como o modelo é de maximização, penalizamos (coeficiente negativo) escalar quem tem
+        # saldo alto e recompensamos escalar quem tem saldo baixo.
         max_abs_balance = max((abs(u.balance) for u in users), default=1.0) or 1.0
         for u in users:
             normalized = u.balance / max_abs_balance  # [-1, 1]
@@ -447,7 +470,7 @@ class ScheduleSolver:
                 for t_id in type_ids:
                     if (u.id, day.date, t_id) not in x:
                         continue
-                    objective_terms.append(WEIGHT_BALANCE * scaled * x[(u.id, day.date, t_id)])
+                    objective_terms.append(-WEIGHT_BALANCE * scaled * x[(u.id, day.date, t_id)])
 
         # Equilíbrio de carga (minimizar desvio entre número de atribuições)
         if users:
@@ -497,10 +520,10 @@ class ScheduleSolver:
                             continue
                         if solver.value(x[(u.id, day.date, t_id)]) == 1:
                             flags = {"eligible": True, "rested": True}
-                            if day.date in u.desired_dates:
+                            if (day.date, t_id) in u.desired_typed or day.date in u.desired_any:
                                 flags["desired_date"] = True
                                 preferences_fulfilled += 1
-                            if day.date in u.avoid_dates:
+                            if (day.date, t_id) in u.avoid_typed or day.date in u.avoid_any:
                                 flags["avoided_date"] = True
                                 avoided_assigned += 1
                             if u.balance > 0:
@@ -547,8 +570,8 @@ class ScheduleSolver:
             schedule_id=schedule_id,
             eligible_users_count=len([u for u in users if u.eligible_type_ids]),
             total_slots=sum(self.coverage.values()),
-            preferences_desired_count=sum(len(u.desired_dates) for u in users),
-            preferences_avoid_count=sum(len(u.avoid_dates) for u in users),
+            preferences_desired_count=sum(len(u.desired_typed) + len(u.desired_any) for u in users),
+            preferences_avoid_count=sum(len(u.avoid_typed) + len(u.avoid_any) for u in users),
             preferences_fulfilled_count=preferences_fulfilled,
             avoided_dates_assigned_count=avoided_assigned,
             gaps_count=gaps_count,

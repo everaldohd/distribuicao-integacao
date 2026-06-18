@@ -9,6 +9,7 @@ interface Props {
 
 const managerLinks = [
   { to: '/gestor/usuarios', label: 'Usuários' },
+  { to: '/gestor/perfis', label: 'Perfis & Regras' },
   { to: '/gestor/tipos-escala', label: 'Tipos de Escala' },
   { to: '/gestor/calendarios', label: 'Calendários' },
   { to: '/gestor/escalas', label: 'Escalas' },
@@ -16,8 +17,7 @@ const managerLinks = [
 ]
 
 const userLinks = [
-  { to: '/usuario/escala', label: 'Minha Escala' },
-  { to: '/usuario/preferencias', label: 'Preferências' },
+  { to: '/usuario/agenda', label: 'Minha Agenda' },
   { to: '/usuario/trocas', label: 'Trocas' },
   { to: '/usuario/saldo', label: 'Meu Saldo' },
 ]

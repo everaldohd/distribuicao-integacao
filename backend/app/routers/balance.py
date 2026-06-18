@@ -58,15 +58,28 @@ def my_balance(
 @router.get("/leaderboard", response_model=List[LeaderboardEntry], dependencies=[Depends(get_current_user)])
 def leaderboard(db: Session = Depends(get_db)):
     from sqlalchemy import func
-    # Último saldo acumulado por usuário
-    subq = db.query(
+    # Saldo mais recente por usuário (maior ano/mês). Usa o cumulative do registro mais recente.
+    latest = db.query(
         HistoricalBalance.user_id,
-        func.max(HistoricalBalance.cumulative_balance).label("balance"),
+        func.max(HistoricalBalance.year * 100 + HistoricalBalance.month).label("ym"),
     ).group_by(HistoricalBalance.user_id).subquery()
 
-    results = db.query(User.id, User.name, subq.c.balance).join(
-        subq, User.id == subq.c.user_id
-    ).filter(User.is_active == True).order_by(subq.c.balance.desc()).all()
+    bal = db.query(
+        HistoricalBalance.user_id.label("user_id"),
+        HistoricalBalance.cumulative_balance.label("balance"),
+    ).join(
+        latest,
+        (HistoricalBalance.user_id == latest.c.user_id)
+        & (HistoricalBalance.year * 100 + HistoricalBalance.month == latest.c.ym),
+    ).subquery()
+
+    # LEFT JOIN: todos os peritos ativos (não-gestores) aparecem, mesmo sem saldo (0.0)
+    results = db.query(User.id, User.name, bal.c.balance).outerjoin(
+        bal, User.id == bal.c.user_id
+    ).filter(
+        User.is_active == True,
+        User.is_manager == False,
+    ).order_by(func.coalesce(bal.c.balance, 0.0).desc(), User.name).all()
 
     return [
         LeaderboardEntry(user_id=r[0], user_name=r[1], cumulative_balance=r[2] or 0.0, rank=i + 1)
