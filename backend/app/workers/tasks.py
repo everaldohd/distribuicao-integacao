@@ -69,7 +69,7 @@ def post_publish_tasks(schedule_id: str):
 
 @celery_app.task(name="notify_exchange")
 def notify_exchange(exchange_id: str, event: str):
-    """Envia e-mail para eventos de troca: requested, accepted, rejected."""
+    """Notifica eventos de troca: requested, proposed, accepted, rejected, approved."""
     db = SessionLocal()
     try:
         from app.models.exchange import Exchange
@@ -83,7 +83,16 @@ def notify_exchange(exchange_id: str, event: str):
 
         from app.services.notification import notify_exchange_requested, notify_exchange_resolved
         if event == "requested" and target:
+            # Troca direta: avisa o colega indicado
             notify_exchange_requested(target.email, target.name, requester.name)
+        elif event == "proposed" and requester:
+            # Alguém propôs na oferta aberta: avisa o autor da oferta
+            notify_exchange_requested(requester.email, requester.name, target.name if target else "um colega")
+        elif event == "approved":
+            # Aprovada pelo gestor: avisa ambos
+            for u in (requester, target):
+                if u:
+                    notify_exchange_resolved(u.email, u.name, accepted=True)
         elif event in ("accepted", "rejected") and requester:
             notify_exchange_resolved(requester.email, requester.name, accepted=(event == "accepted"))
     except Exception as exc:

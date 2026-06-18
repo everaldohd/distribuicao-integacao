@@ -1,10 +1,11 @@
 """Validação de trocas de escala contra regras operacionais rígidas."""
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
 from app.models.eligibility import Eligibility
+from app.models.historical_balance import BalanceConfig
 from app.models.schedule import Assignment
 from app.models.schedule_type import ScheduleType
 from app.models.unavailability import Unavailability
@@ -19,12 +20,19 @@ class ValidationResult:
         return "; ".join(self.errors)
 
 
+def get_min_lead_days(db: Session) -> int:
+    cfg = db.query(BalanceConfig).first()
+    return cfg.exchange_min_lead_days if cfg and cfg.exchange_min_lead_days is not None else 3
+
+
 def validate_exchange(
     db: Session,
     requester_assignment_id: str,
     target_assignment_id: str,
 ) -> ValidationResult:
-    """Valida se uma troca entre duas atribuições viola regras rígidas."""
+    """Valida se uma troca 1:1 entre duas atribuições viola regras rígidas:
+    mesmo grupo, antecedência mínima, elegibilidade, indisponibilidade,
+    interstício pós-Plantão 12h e não-duplicação de turno no mesmo dia."""
     errors = []
 
     req = db.get(Assignment, requester_assignment_id)
@@ -33,7 +41,26 @@ def validate_exchange(
     if not req or not tgt:
         return ValidationResult(False, ["Atribuição não encontrada"])
 
+    if req.id == tgt.id or req.user_id == tgt.user_id:
+        return ValidationResult(False, ["Não é possível trocar com a própria atribuição/usuário"])
+
     req_user_id, tgt_user_id = req.user_id, tgt.user_id
+
+    # 0a. Mesmo grupo (Plantão↔Plantão, Reserva↔Reserva, Pátio↔Pátio)
+    req_type = db.get(ScheduleType, req.schedule_type_id)
+    tgt_type = db.get(ScheduleType, tgt.schedule_type_id)
+    req_group = (req_type.group_name or req_type.name) if req_type else None
+    tgt_group = (tgt_type.group_name or tgt_type.name) if tgt_type else None
+    if req_group != tgt_group:
+        errors.append(f"Troca só é permitida dentro do mesmo grupo ({req_group} ≠ {tgt_group})")
+
+    # 0b. Antecedência mínima — os dois turnos precisam estar suficientemente no futuro
+    min_lead = get_min_lead_days(db)
+    limite = date.today() + timedelta(days=min_lead)
+    for d in (req.date, tgt.date):
+        if d < limite:
+            errors.append(f"Troca exige antecedência mínima de {min_lead} dia(s); {d} está dentro do prazo")
+            break
 
     # Após a troca: req_user ficará no turno do tgt e vice-versa
     # Validar cada usuário no novo turno
@@ -85,5 +112,16 @@ def validate_exchange(
         ).first()
         if prev_rest_assignment:
             errors.append(f"Usuário {user_id} fez Plantão 12h em {prev_day} e precisa de descanso em {new_date}")
+
+        # 4. Não pode ficar com dois turnos no mesmo dia (ignora as duas vagas da própria troca)
+        outro_no_dia = db.query(Assignment).filter(
+            Assignment.user_id == user_id,
+            Assignment.date == new_date,
+            Assignment.is_gap == False,
+            Assignment.schedule_id == new_assignment.schedule_id,
+            Assignment.id.notin_([req.id, tgt.id]),
+        ).first()
+        if outro_no_dia:
+            errors.append(f"Usuário {user_id} já tem outro turno em {new_date}")
 
     return ValidationResult(passed=len(errors) == 0, errors=errors)

@@ -24,6 +24,19 @@ def list_schedules(db: Session = Depends(get_db)):
     return db.query(Schedule).order_by(Schedule.year.desc(), Schedule.month.desc(), Schedule.version.desc()).all()
 
 
+@router.get("/published", response_model=ScheduleOut, dependencies=[Depends(get_current_user)])
+def get_published(year: int, month: int, db: Session = Depends(get_db)):
+    """Escala publicada do mês (pública a qualquer perito logado) — calendário geral.
+    Retorna a versão publicada mais recente do período."""
+    s = db.query(Schedule).filter(
+        Schedule.year == year, Schedule.month == month,
+        Schedule.status == ScheduleStatus.PUBLISHED,
+    ).order_by(Schedule.version.desc()).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="Nenhuma escala publicada para este mês")
+    return s
+
+
 @router.get("/{schedule_id}", response_model=ScheduleOut, dependencies=[Depends(get_current_user)])
 def get_schedule(schedule_id: str, db: Session = Depends(get_db)):
     s = db.get(Schedule, schedule_id)

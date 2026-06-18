@@ -2,44 +2,53 @@ import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
 
 class ExchangeType(str, PyEnum):
-    OPEN = "open"       # disponibiliza para todos elegíveis
-    DIRECT = "direct"   # solicita troca para usuário específico
+    OPEN = "open"       # turno colocado à disposição no mural
+    DIRECT = "direct"   # solicitação direta a um colega específico
 
 
 class ExchangeStatus(str, PyEnum):
-    PENDING = "pending"
-    ACCEPTED = "accepted"
-    REJECTED = "rejected"
-    CANCELLED = "cancelled"
-    INVALID = "invalid"   # bloqueada por regra operacional
+    OPEN = "open"                       # mural: aguardando um colega propor turno
+    AWAITING_TARGET = "awaiting_target" # direta: aguardando o colega aceitar
+    AWAITING_MANAGER = "awaiting_manager"  # peritos concordaram, aguardando o gestor
+    APPROVED = "approved"               # gestor aprovou e a troca foi executada
+    REJECTED = "rejected"               # recusada pelo colega ou pelo gestor
+    CANCELLED = "cancelled"             # cancelada pelo solicitante
+    EXPIRED = "expired"                 # entrou na janela de antecedência / turno passou
 
 
 class Exchange(Base):
-    """Solicitação de troca de escala entre usuários."""
+    """Troca de escala 1:1 (mesmo grupo) entre peritos, com aprovação do gestor.
+
+    `status` e `type` são guardados como texto (valores dos enums acima) para
+    evitar tipos ENUM rígidos no Postgres.
+    """
     __tablename__ = "exchanges"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    type: Mapped[ExchangeType] = mapped_column(Enum(ExchangeType), nullable=False)
-    status: Mapped[ExchangeStatus] = mapped_column(Enum(ExchangeStatus), default=ExchangeStatus.PENDING, nullable=False)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default=ExchangeStatus.OPEN.value, nullable=False)
 
-    # Quem oferece
+    # Quem oferece o turno
     requester_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
     requester_assignment_id: Mapped[str] = mapped_column(String(36), ForeignKey("assignments.id"), nullable=False)
 
-    # Quem recebe (None = troca aberta)
+    # Colega (None enquanto a oferta aberta não tem proposta)
     target_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     target_assignment_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("assignments.id"), nullable=True)
 
-    # Validação automática
+    # Validação automática (regras rígidas)
     validation_passed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     validation_errors: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Aprovação do gestor
+    approved_by_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

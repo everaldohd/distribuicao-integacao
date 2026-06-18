@@ -107,17 +107,27 @@ export interface Schedule {
   assignments: Assignment[]
 }
 
+export type ExchangeStatus =
+  | 'open' | 'awaiting_target' | 'awaiting_manager' | 'approved' | 'rejected' | 'cancelled' | 'expired'
+
 export interface Exchange {
   id: string
+  type: 'open' | 'direct' | string
+  status: ExchangeStatus | string
   requester_id: string
   requester_name: string
-  target_user_id: string | null
-  target_user_name: string | null
-  assignment_id: string
-  assignment_date: string
-  assignment_type: string
-  status: 'OPEN' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED'
+  requester_date: string | null
+  requester_type: string | null
+  group: string | null
+  target_id: string | null
+  target_name: string | null
+  target_date: string | null
+  target_type: string | null
+  validation_passed: boolean | null
+  validation_errors: string | null
+  notes: string | null
   created_at: string
+  resolved_at: string | null
 }
 
 export interface BalanceEntry {

@@ -38,6 +38,18 @@ export function PerfisPage() {
     mutationFn: (f: number) => api.put('/preferences/config', { preference_factor: f }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pref-config'] }),
   })
+
+  // Antecedência mínima de troca
+  const { data: exCfg } = useQuery<{ min_lead_days: number }>({
+    queryKey: ['ex-config'],
+    queryFn: () => api.get('/exchanges/config').then((r) => r.data),
+  })
+  const [lead, setLead] = useState<number | null>(null)
+  const leadValue = lead ?? exCfg?.min_lead_days ?? 3
+  const saveLead = useMutation({
+    mutationFn: (d: number) => api.put('/exchanges/config', { min_lead_days: d }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ex-config'] }),
+  })
   const { data: profiles = [], isLoading } = useQuery<Profile[]>({
     queryKey: ['profiles'],
     queryFn: () => api.get('/profiles/').then((r) => r.data),
@@ -115,6 +127,18 @@ export function PerfisPage() {
             />
             <Button size="sm" loading={saveFactor.isPending} onClick={() => saveFactor.mutate(factorValue)}>Salvar fator</Button>
             <span className="text-xs text-gray-400">Ex.: fator 2 → grupo com cota 2 permite até 4 dias de preferência (desejo e evitar contam separado).</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-sm mt-3 pt-3 border-t border-gray-100">
+            <span className="font-semibold text-gray-700">Antecedência mínima de troca:</span>
+            <input
+              type="number" min={0}
+              className="w-16 rounded-lg border border-gray-300 px-2 py-1 text-center"
+              value={leadValue}
+              onChange={(e) => setLead(Number(e.target.value))}
+            />
+            <span className="text-gray-500">dia(s)</span>
+            <Button size="sm" loading={saveLead.isPending} onClick={() => saveLead.mutate(leadValue)}>Salvar antecedência</Button>
+            <span className="text-xs text-gray-400">Trocas só podem envolver turnos a pelo menos N dias no futuro.</span>
           </div>
         </CardBody>
       </Card>

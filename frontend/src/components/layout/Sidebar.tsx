@@ -13,12 +13,15 @@ const managerLinks = [
   { to: '/gestor/tipos-escala', label: 'Tipos de Escala' },
   { to: '/gestor/calendarios', label: 'Calendários' },
   { to: '/gestor/escalas', label: 'Escalas' },
+  { to: '/gestor/aprovar-trocas', label: 'Aprovar Trocas' },
+  { to: '/gestor/escala-geral', label: 'Escala Geral' },
   { to: '/gestor/saldo', label: 'Saldo / Ranking' },
   { to: '/gestor/auditoria', label: 'Auditoria' },
 ]
 
 const userLinks = [
   { to: '/usuario/agenda', label: 'Minha Agenda' },
+  { to: '/usuario/escala-geral', label: 'Escala Geral' },
   { to: '/usuario/trocas', label: 'Trocas' },
   { to: '/usuario/saldo', label: 'Meu Saldo' },
 ]

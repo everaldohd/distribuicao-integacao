@@ -13,6 +13,8 @@ import { EscalaDetalhePage } from './pages/gestor/EscalaDetalhePage'
 import { SaldoGestorPage } from './pages/gestor/SaldoGestorPage'
 import { MinhaAgendaPage } from './pages/usuario/MinhaAgendaPage'
 import { TrocasPage } from './pages/usuario/TrocasPage'
+import { EscalaPublicaPage } from './pages/EscalaPublicaPage'
+import { AprovarTrocasPage } from './pages/gestor/AprovarTrocasPage'
 import { SaldoPage } from './pages/usuario/SaldoPage'
 import { getToken } from './lib/auth'
 
@@ -36,10 +38,13 @@ export default function App() {
         <Route path="/gestor/escalas" element={<EscalasPage />} />
         <Route path="/gestor/escalas/:id" element={<EscalaDetalhePage />} />
         <Route path="/gestor/saldo" element={<SaldoGestorPage />} />
+        <Route path="/gestor/aprovar-trocas" element={<AprovarTrocasPage />} />
+        <Route path="/gestor/escala-geral" element={<EscalaPublicaPage />} />
         <Route path="/gestor/auditoria" element={<AuditoriaPage />} />
 
         {/* Usuário */}
         <Route path="/usuario/agenda" element={<MinhaAgendaPage />} />
+        <Route path="/usuario/escala-geral" element={<EscalaPublicaPage />} />
         <Route path="/usuario/escala" element={<Navigate to="/usuario/agenda" replace />} />
         <Route path="/usuario/preferencias" element={<Navigate to="/usuario/agenda" replace />} />
         <Route path="/usuario/trocas" element={<TrocasPage />} />
