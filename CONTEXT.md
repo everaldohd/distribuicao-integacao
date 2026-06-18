@@ -97,9 +97,17 @@ docker compose exec backend python -m app.seed_test   # 100 peritos de teste
 
 ---
 
+## Trocas de escala
+
+Troca **1:1, mesmo grupo** (Plantão/Reserva/Pátio), com **aprovação do gestor** e auditoria.
+Fluxos: mural (oferta aberta → colega propõe) e direta (solicita a um colega). Antecedência
+mínima configurável (`BalanceConfig.exchange_min_lead_days`). Validação rígida em cada etapa;
+execução atômica (swap das atribuições) só na aprovação. `GET /schedules/published` expõe a
+escala do mês a qualquer perito (calendário geral). Router: `app/routers/exchanges.py`.
+
 ## Próximos Passos
 
-- [ ] **Sistema de trocas** entre peritos (modelo `Exchange` e validador já existem; faltam fluxo/UX completos).
 - [ ] Integração NEO (SSO) real — habilitar quando a equipe do NEO fornecer o segredo/contrato.
-- [ ] Testes automatizados (pytest) e migrations Alembic versionadas.
 - [ ] Relatórios e datas especiais (Natal/Ano Novo/Carnaval), previstos na SPEC.
+- [ ] Expiração automática de ofertas de troca ao entrar na janela de antecedência (hoje a
+      antecedência é checada na criação/aceite/aprovação; falta um job que marque `expired`).
