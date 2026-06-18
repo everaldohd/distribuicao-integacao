@@ -1,0 +1,19 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["alembic"]
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: isort, UP: pyupgrade, B: bugbear
+select = ["E", "W", "F", "I", "UP", "B"]
+ignore = [
+    "B008",  # Depends() como default de argumento é o padrão do FastAPI
+    "E711",  # `== None` é o idioma de filtro do SQLAlchemy (vira `IS NULL`)
+    "E712",  # `== True/False` idem (vira `IS TRUE/FALSE`)
+    "E501",  # comprimento de linha não é bloqueante (formatação fica a cargo do formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Modelos usam forward references em string (Mapped["User"]) resolvidas pelo
+# SQLAlchemy em runtime — o ruff as vê como nomes indefinidos (falso positivo).
+"app/models/*" = ["F821"]

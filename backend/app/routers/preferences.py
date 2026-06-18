@@ -1,20 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List, Optional, Dict
-from datetime import date
-from pydantic import BaseModel
-from app.core.database import get_db
-from app.core.config import settings
-from app.models.preference import UserPreference, PreferenceType
-from app.models.schedule_type import ScheduleType
-from app.models.profile import Profile, ProfileGroupLimit, UserGroupLimit
-from app.models.operational_calendar import OperationalCalendar
-from app.models.historical_balance import BalanceConfig
-from app.models.user import User
-from app.routers.deps import get_current_user, get_current_manager
-from app.services.audit import log_action
-from app.models.audit import AuditAction
 import uuid
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.models.audit import AuditAction
+from app.models.historical_balance import BalanceConfig
+from app.models.operational_calendar import OperationalCalendar
+from app.models.preference import PreferenceType, UserPreference
+from app.models.profile import Profile, UserGroupLimit
+from app.models.schedule_type import ScheduleType
+from app.models.user import User
+from app.routers.deps import get_current_manager, get_current_user
+from app.services.audit import log_action
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
 
@@ -28,16 +28,16 @@ def _factor(db: Session) -> int:
     return cfg.preference_factor if cfg and cfg.preference_factor else 2
 
 
-def _group_limits_for(db: Session, user: User) -> Dict[str, int]:
+def _group_limits_for(db: Session, user: User) -> dict[str, int]:
     """Cota máxima por grupo (Plantão/Reserva/Pátio) do perito."""
     profile = db.get(Profile, user.profile_id) if user.profile_id else None
     if profile is None:
         profile = db.query(Profile).filter(Profile.is_default == True).first()
     if profile and profile.is_custom:
-        return {l.group_name: l.max_quantity for l in
+        return {gl.group_name: gl.max_quantity for gl in
                 db.query(UserGroupLimit).filter(UserGroupLimit.user_id == user.id).all()}
     if profile:
-        return {l.group_name: l.max_quantity for l in profile.group_limits}
+        return {gl.group_name: gl.max_quantity for gl in profile.group_limits}
     return {}
 
 
@@ -58,7 +58,7 @@ class PreferenceOut(BaseModel):
     year: int
     month: int
     date: date
-    schedule_type_id: Optional[str]
+    schedule_type_id: str | None
     type: PreferenceType
 
     model_config = {"from_attributes": True}
@@ -72,10 +72,10 @@ class ModalityOut(BaseModel):
 
 class OptionsOut(BaseModel):
     factor: int
-    modalities: List[ModalityOut]
-    group_caps: Dict[str, int]                 # {group: cota_grupo * fator}
-    availability: Dict[str, List[str]]         # {schedule_type_id: [datas ISO]}
-    preferences: List[PreferenceOut]
+    modalities: list[ModalityOut]
+    group_caps: dict[str, int]                 # {group: cota_grupo * fator}
+    availability: dict[str, list[str]]         # {schedule_type_id: [datas ISO]}
+    preferences: list[PreferenceOut]
     calendar_open: bool
 
 
@@ -104,7 +104,7 @@ def get_options(year: int, month: int, current_user: User = Depends(get_current_
     cal = db.query(OperationalCalendar).filter(
         OperationalCalendar.year == year, OperationalCalendar.month == month
     ).first()
-    availability: Dict[str, List[str]] = {}
+    availability: dict[str, list[str]] = {}
     calendar_open = bool(cal and cal.status.value == "open")
     if cal:
         for day in cal.days:
@@ -127,7 +127,7 @@ def get_options(year: int, month: int, current_user: User = Depends(get_current_
     )
 
 
-@router.get("/", response_model=List[PreferenceOut])
+@router.get("/", response_model=list[PreferenceOut])
 def list_my_preferences(year: int, month: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return db.query(UserPreference).filter(
         UserPreference.user_id == current_user.id,

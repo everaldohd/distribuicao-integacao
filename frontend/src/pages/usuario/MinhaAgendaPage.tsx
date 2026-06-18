@@ -4,8 +4,7 @@ import { api } from '../../lib/api'
 import { getMe } from '../../lib/auth'
 import type { PreferenceType, PreferenceOptions, Schedule } from '../../lib/types'
 import { Card, CardBody } from '../../components/ui/Card'
-import { getDay, format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { getDay } from 'date-fns'
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const WEEKDAYS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
@@ -108,6 +107,8 @@ export function MinhaAgendaPage() {
       u[g] = (u[g] ?? 0) + 1
     })
     return u
+    // groupOf deriva de `options`, já listado como dependência
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options, mode])
 
   const firstDay = new Date(cursor.year, cursor.month - 1, 1)

@@ -232,7 +232,7 @@ DistribuicaoIntegracao/
 │       ├── main.py            # registra os routers
 │       ├── seed.py            # seed inicial (gestor, tipos, perfis, config)
 │       ├── seed_test.py       # 100 peritos de teste
-│       ├── migrate_*.py       # migrações pontuais (perfis por grupo, preferências por tipo)
+│       ├── alembic/           # migrations versionadas (schema do banco)
 │       ├── core/              # config, database, security (JWT/bcrypt)
 │       ├── models/            # tabelas SQLAlchemy
 │       ├── schemas/           # contratos Pydantic
@@ -292,8 +292,12 @@ Prefixo: `/api/v1`. Documentação interativa: `/docs`.
 - **Auditoria**: toda ação de admin (usuários, perfis, elegibilidades, cotas, férias, escalas) e
   do perito (preferências) é gravada em `audit_logs` com autor, valores anterior/novo e descrição;
   consultável em **Auditoria** (gestor). A geração da escala também grava `SolverAudit` (métricas da otimização).
-- **Testes**: `pytest` cobrindo auth, usuários, tipos, **solver (cota/interstício)**, **saldo** e
-  **limite de preferências**. Rode: `docker compose exec backend python -m pytest -q`.
+- **Testes**: `pytest` (backend) cobrindo auth, usuários, tipos, **solver (cota/interstício)**, **saldo**
+  e **limite de preferências**; `vitest` (frontend). Rode: `docker compose exec backend python -m pytest -q`
+  e `docker compose exec frontend npm test`.
+- **Migrations**: schema gerenciado por **Alembic** (`alembic upgrade head` roda no startup do backend).
+- **Lint**: `ruff` (backend) e `eslint` (frontend).
+- **CI**: GitHub Actions (`.github/workflows/ci.yml`) roda lint + testes + build a cada push/PR.
 
 ---
 

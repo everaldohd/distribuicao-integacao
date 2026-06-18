@@ -1,6 +1,6 @@
-from pydantic_settings import BaseSettings
-from typing import List
 import secrets
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # CORS — lista separada por vírgula no .env
-    CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
     # Database
     DATABASE_URL: str = "postgresql://escalas:escalas@db:5432/escalas"

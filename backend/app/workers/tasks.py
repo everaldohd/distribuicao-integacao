@@ -1,7 +1,8 @@
 """Tasks Celery para execução assíncrona do solver e notificações."""
-from app.workers.celery_app import celery_app
-from app.core.database import SessionLocal
 import logging
+
+from app.core.database import SessionLocal
+from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ def post_publish_tasks(schedule_id: str):
         compute_and_persist_monthly_balances(db, schedule_id)
 
         # 2. Notificar usuários escalados
-        from app.models.schedule import Schedule, Assignment
+        from app.models.schedule import Assignment, Schedule
         from app.models.user import User
         schedule = db.get(Schedule, schedule_id)
         if not schedule:

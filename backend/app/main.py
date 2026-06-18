@@ -1,18 +1,43 @@
 import time
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, users, schedule_types, calendars, schedules, preferences, exchanges, balance, profiles, diagnostics, audit
+
 from app.core.config import settings
-from app.core.logging import setup_logging, get_logger
+from app.core.logging import get_logger, setup_logging
+from app.routers import (
+    audit,
+    auth,
+    balance,
+    calendars,
+    diagnostics,
+    exchanges,
+    preferences,
+    profiles,
+    schedule_types,
+    schedules,
+    users,
+)
 
 setup_logging(settings.LOG_LEVEL)
 logger = get_logger(__name__)
 access_logger = get_logger("app.access")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Aplicação iniciada | CORS: %s", settings.CORS_ORIGINS)
+    yield
+    # Shutdown (nada a liberar por enquanto)
+
+
 app = FastAPI(
     title="Sistema de Gestão de Escalas",
     version="1.0.0",
     description="API para gerenciamento, distribuição e auditoria de escalas de serviço.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -46,10 +71,6 @@ async def log_requests(request: Request, call_next):
         access_logger.info(msg, *args)
     return response
 
-
-@app.on_event("startup")
-async def on_startup():
-    logger.info("Aplicação iniciada | CORS: %s", settings.CORS_ORIGINS)
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")

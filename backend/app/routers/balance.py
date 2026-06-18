@@ -1,11 +1,12 @@
+
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from typing import List
-from app.core.database import get_db
-from app.models.historical_balance import HistoricalBalance, BalanceConfig
-from app.models.user import User
-from app.routers.deps import get_current_user, get_current_manager
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.models.historical_balance import BalanceConfig, HistoricalBalance
+from app.models.user import User
+from app.routers.deps import get_current_manager, get_current_user
 
 router = APIRouter(prefix="/balance", tags=["balance"])
 
@@ -45,7 +46,7 @@ class BalanceConfigUpdate(BaseModel):
     avoided_date_assigned: int
 
 
-@router.get("/me", response_model=List[BalanceOut])
+@router.get("/me", response_model=list[BalanceOut])
 def my_balance(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -55,7 +56,7 @@ def my_balance(
     ).order_by(HistoricalBalance.year.desc(), HistoricalBalance.month.desc()).all()
 
 
-@router.get("/leaderboard", response_model=List[LeaderboardEntry], dependencies=[Depends(get_current_user)])
+@router.get("/leaderboard", response_model=list[LeaderboardEntry], dependencies=[Depends(get_current_user)])
 def leaderboard(db: Session = Depends(get_db)):
     from sqlalchemy import func
     # Saldo mais recente por usuário (maior ano/mês). Usa o cumulative do registro mais recente.
@@ -118,8 +119,8 @@ def update_config(
         cfg.updated_by_id = manager.id
     db.commit()
     db.refresh(cfg)
-    from app.services.audit import log_action
     from app.models.audit import AuditAction
+    from app.services.audit import log_action
     log_action(db, manager.id, AuditAction.UPDATE, "BalanceConfig", cfg.id,
                new_value=data.model_dump(), description="Configuração de saldo atualizada")
     return cfg

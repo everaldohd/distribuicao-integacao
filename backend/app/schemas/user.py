@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserCreate(BaseModel):
@@ -8,27 +8,27 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     is_manager: bool = False
-    profile_id: Optional[str] = None
-    matricula: Optional[str] = None
+    profile_id: str | None = None
+    matricula: str | None = None
 
 
 class UserUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=2, max_length=200)
-    email: Optional[EmailStr] = None
-    is_manager: Optional[bool] = None
-    is_active: Optional[bool] = None
-    profile_id: Optional[str] = None
-    matricula: Optional[str] = None
+    name: str | None = Field(None, min_length=2, max_length=200)
+    email: EmailStr | None = None
+    is_manager: bool | None = None
+    is_active: bool | None = None
+    profile_id: str | None = None
+    matricula: str | None = None
 
 
 class UserOut(BaseModel):
     id: str
     name: str
     email: str
-    matricula: Optional[str] = None
+    matricula: str | None = None
     is_manager: bool
     is_active: bool
-    profile_id: Optional[str]
+    profile_id: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

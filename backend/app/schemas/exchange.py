@@ -1,15 +1,16 @@
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
-from app.models.exchange import ExchangeType, ExchangeStatus
+
+from pydantic import BaseModel
+
+from app.models.exchange import ExchangeStatus, ExchangeType
 
 
 class ExchangeCreate(BaseModel):
     type: ExchangeType
     requester_assignment_id: str
-    target_id: Optional[str] = None
-    target_assignment_id: Optional[str] = None
-    notes: Optional[str] = None
+    target_id: str | None = None
+    target_assignment_id: str | None = None
+    notes: str | None = None
 
 
 class ExchangeOut(BaseModel):
@@ -19,14 +20,14 @@ class ExchangeOut(BaseModel):
     requester_id: str
     requester_name: str
     requester_assignment_id: str
-    target_id: Optional[str]
-    target_name: Optional[str]
-    target_assignment_id: Optional[str]
-    validation_passed: Optional[bool]
-    validation_errors: Optional[str]
-    notes: Optional[str]
+    target_id: str | None
+    target_name: str | None
+    target_assignment_id: str | None
+    validation_passed: bool | None
+    validation_errors: str | None
+    notes: str | None
     created_at: datetime
-    resolved_at: Optional[datetime]
+    resolved_at: datetime | None
 
     model_config = {"from_attributes": True}
 

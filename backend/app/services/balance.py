@@ -2,17 +2,15 @@
 Serviço de compensação histórica.
 Calcula e persiste o saldo pós-publicação de escala.
 """
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from datetime import date
-from typing import Optional
 import uuid
 
-from app.models.historical_balance import HistoricalBalance, BalanceConfig
-from app.models.user import User
-from app.models.schedule import Schedule, Assignment
-from app.models.preference import UserPreference, PreferenceType
+from sqlalchemy.orm import Session
+
 from app.core.config import settings
+from app.models.historical_balance import BalanceConfig, HistoricalBalance
+from app.models.preference import PreferenceType, UserPreference
+from app.models.schedule import Assignment, Schedule
+from app.models.user import User
 
 
 def _get_config(db: Session) -> BalanceConfig:
@@ -28,7 +26,7 @@ def _get_config(db: Session) -> BalanceConfig:
     )
 
 
-def compute_new_user_initial_balance(db: Session) -> Optional[float]:
+def compute_new_user_initial_balance(db: Session) -> float | None:
     """Retorna a média dos saldos atuais dos usuários ativos para nivelar novo usuário."""
     active_ids = [u.id for u in db.query(User.id).filter(User.is_active == True).all()]
     if not active_ids:

@@ -1,6 +1,8 @@
-from pydantic import BaseModel
 from datetime import date, datetime
-from typing import Optional, List, Dict, Any
+from typing import Any
+
+from pydantic import BaseModel
+
 from app.models.schedule import ScheduleStatus
 
 
@@ -9,11 +11,11 @@ class AssignmentOut(BaseModel):
     date: date
     schedule_type_id: str
     schedule_type_name: str
-    user_id: Optional[str]
-    user_name: Optional[str]
+    user_id: str | None
+    user_name: str | None
     is_gap: bool
     is_manual: bool
-    explanation_flags: Optional[Dict[str, Any]]
+    explanation_flags: dict[str, Any] | None
 
     model_config = {"from_attributes": True}
 
@@ -24,10 +26,10 @@ class ScheduleOut(BaseModel):
     month: int
     version: int
     status: ScheduleStatus
-    simulation_data: Optional[Dict[str, Any]]
-    published_at: Optional[datetime]
+    simulation_data: dict[str, Any] | None
+    published_at: datetime | None
     created_at: datetime
-    assignments: List[AssignmentOut] = []
+    assignments: list[AssignmentOut] = []
 
     model_config = {"from_attributes": True}
 
@@ -38,7 +40,7 @@ class ScheduleSummary(BaseModel):
     month: int
     version: int
     status: ScheduleStatus
-    published_at: Optional[datetime]
+    published_at: datetime | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -56,4 +58,4 @@ class SimulationResult(BaseModel):
     estimated_preferences_fulfilled_pct: float
     estimated_avoided_assigned: int
     expected_gaps: int
-    notes: List[str]
+    notes: list[str]

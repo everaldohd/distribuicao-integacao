@@ -1,8 +1,10 @@
 import uuid
 from datetime import date, datetime
 from enum import Enum as PyEnum
-from sqlalchemy import String, Integer, Date, ForeignKey, DateTime, func, Enum, Text, Boolean, JSON
+
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.database import Base
 
 

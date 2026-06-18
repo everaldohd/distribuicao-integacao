@@ -1,21 +1,22 @@
+import uuid
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-from datetime import datetime, timezone
+
 from app.core.database import get_db
-from app.models.exchange import Exchange, ExchangeType, ExchangeStatus
+from app.models.exchange import Exchange, ExchangeStatus, ExchangeType
 from app.models.schedule import Assignment
 from app.models.user import User
-from app.schemas.exchange import ExchangeCreate, ExchangeOut, ExchangeAccept
 from app.routers.deps import get_current_user
+from app.schemas.exchange import ExchangeAccept, ExchangeCreate, ExchangeOut
 from app.services.exchange_validator import validate_exchange
 from app.workers.tasks import notify_exchange
-import uuid
 
 router = APIRouter(prefix="/exchanges", tags=["exchanges"])
 
 
-@router.get("/", response_model=List[ExchangeOut])
+@router.get("/", response_model=list[ExchangeOut])
 def list_exchanges(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -25,7 +26,7 @@ def list_exchanges(
     ).order_by(Exchange.created_at.desc()).all()
 
 
-@router.get("/open", response_model=List[ExchangeOut])
+@router.get("/open", response_model=list[ExchangeOut])
 def list_open_exchanges(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -106,7 +107,7 @@ def accept_exchange(
     exchange.target_assignment_id = data.target_assignment_id
     exchange.status = ExchangeStatus.ACCEPTED
     exchange.validation_passed = True
-    exchange.resolved_at = datetime.now(timezone.utc)
+    exchange.resolved_at = datetime.now(UTC)
 
     db.commit()
     notify_exchange.delay(exchange.id, "accepted")
@@ -123,7 +124,7 @@ def reject_exchange(
     if not exchange or exchange.target_id != current_user.id:
         raise HTTPException(status_code=400, detail="Troca não encontrada")
     exchange.status = ExchangeStatus.REJECTED
-    exchange.resolved_at = datetime.now(timezone.utc)
+    exchange.resolved_at = datetime.now(UTC)
     db.commit()
     notify_exchange.delay(exchange.id, "rejected")
     return {"message": "Troca recusada"}

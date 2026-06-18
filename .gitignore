@@ -18,8 +18,8 @@ build/
 *.env
 !.env.example
 
-# Alembic
-backend/alembic/versions/*.py
+# Alembic — as migrations versionadas DEVEM ser commitadas; ignoramos só o cache
+backend/alembic/versions/__pycache__/
 
 # Logs
 *.log

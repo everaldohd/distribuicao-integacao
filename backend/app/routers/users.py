@@ -1,22 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List, Optional
+import uuid
 from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.security import hash_password
-from app.models.user import User
-from app.models.historical_balance import HistoricalBalance
+from app.models.audit import AuditAction
 from app.models.eligibility import Eligibility
+from app.models.historical_balance import HistoricalBalance
+from app.models.profile import Profile, UserGroupLimit
 from app.models.schedule_type import ScheduleType
 from app.models.unavailability import Unavailability, UnavailabilityType
-from app.models.profile import Profile, ProfileGroupLimit, UserGroupLimit
-from app.schemas.user import UserCreate, UserUpdate, UserOut, UserPasswordChange
-from app.routers.deps import get_current_user, get_current_manager
-from app.services.balance import compute_new_user_initial_balance
+from app.models.user import User
+from app.routers.deps import get_current_manager, get_current_user
+from app.schemas.user import UserCreate, UserOut, UserPasswordChange, UserUpdate
 from app.services.audit import log_action
-from app.models.audit import AuditAction
-import uuid
+from app.services.balance import compute_new_user_initial_balance
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -42,7 +43,7 @@ def change_password(
 
 # --- Manager endpoints ---
 
-@router.get("/", response_model=List[UserOut], dependencies=[Depends(get_current_manager)])
+@router.get("/", response_model=list[UserOut], dependencies=[Depends(get_current_manager)])
 def list_users(db: Session = Depends(get_db)):
     return db.query(User).order_by(User.name).all()
 
@@ -130,7 +131,7 @@ class EligibilityItem(BaseModel):
 
 
 class EligibilitySet(BaseModel):
-    eligible_type_ids: List[str]
+    eligible_type_ids: list[str]
 
 
 def _get_user_or_404(user_id: str, db: Session) -> User:
@@ -140,7 +141,7 @@ def _get_user_or_404(user_id: str, db: Session) -> User:
     return user
 
 
-@router.get("/{user_id}/eligibilities", response_model=List[EligibilityItem],
+@router.get("/{user_id}/eligibilities", response_model=list[EligibilityItem],
             dependencies=[Depends(get_current_manager)])
 def get_eligibilities(user_id: str, db: Session = Depends(get_db)):
     _get_user_or_404(user_id, db)
@@ -196,7 +197,7 @@ class UnavailabilityOut(BaseModel):
     type: UnavailabilityType
     start_date: date
     end_date: date
-    notes: Optional[str] = None
+    notes: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -205,10 +206,10 @@ class UnavailabilityCreate(BaseModel):
     type: UnavailabilityType = UnavailabilityType.VACATION
     start_date: date
     end_date: date
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
-@router.get("/{user_id}/unavailabilities", response_model=List[UnavailabilityOut],
+@router.get("/{user_id}/unavailabilities", response_model=list[UnavailabilityOut],
             dependencies=[Depends(get_current_manager)])
 def list_unavailabilities(user_id: str, db: Session = Depends(get_db)):
     _get_user_or_404(user_id, db)
@@ -262,7 +263,7 @@ def delete_unavailability(user_id: str, unav_id: str, db: Session = Depends(get_
 # ---------------------------------------------------------------------------
 
 class UserLimitsOut(BaseModel):
-    profile_id: Optional[str]
+    profile_id: str | None
     profile_name: str
     is_custom: bool
     limits: dict  # {group_name: max_quantity}
@@ -272,9 +273,9 @@ class UserLimitsSet(BaseModel):
     limits: dict  # {group_name: max_quantity}
 
 
-def _ordered_group_names(db: Session) -> List[str]:
+def _ordered_group_names(db: Session) -> list[str]:
     types = db.query(ScheduleType).order_by(ScheduleType.display_order, ScheduleType.name).all()
-    seen: List[str] = []
+    seen: list[str] = []
     for t in types:
         g = t.group_name or t.name
         if g not in seen:
@@ -282,7 +283,7 @@ def _ordered_group_names(db: Session) -> List[str]:
     return seen
 
 
-def _effective_limits(db: Session, user: User) -> tuple[Optional[Profile], dict]:
+def _effective_limits(db: Session, user: User) -> tuple[Profile | None, dict]:
     """Retorna (perfil_efetivo, {grupo: limite}) considerando perfil fixo, custom ou padrão."""
     groups = _ordered_group_names(db)
     profile = db.get(Profile, user.profile_id) if user.profile_id else None
@@ -290,10 +291,10 @@ def _effective_limits(db: Session, user: User) -> tuple[Optional[Profile], dict]
         profile = db.query(Profile).filter(Profile.is_default == True).first()
 
     if profile and profile.is_custom:
-        base = {l.group_name: l.max_quantity for l in
+        base = {gl.group_name: gl.max_quantity for gl in
                 db.query(UserGroupLimit).filter(UserGroupLimit.user_id == user.id).all()}
     elif profile:
-        base = {l.group_name: l.max_quantity for l in profile.group_limits}
+        base = {gl.group_name: gl.max_quantity for gl in profile.group_limits}
     else:
         base = {}
     return profile, {g: base.get(g, 0) for g in groups}
@@ -322,7 +323,7 @@ def set_user_limits(user_id: str, data: UserLimitsSet, db: Session = Depends(get
 
     user.profile_id = custom.id
     groups = set(_ordered_group_names(db))
-    existing = {l.group_name: l for l in db.query(UserGroupLimit).filter(UserGroupLimit.user_id == user_id).all()}
+    existing = {gl.group_name: gl for gl in db.query(UserGroupLimit).filter(UserGroupLimit.user_id == user_id).all()}
     for group, qty in data.limits.items():
         if group not in groups:
             continue

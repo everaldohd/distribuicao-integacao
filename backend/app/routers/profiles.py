@@ -1,14 +1,15 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List, Optional, Dict
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from app.core.database import get_db
+from app.models.audit import AuditAction
 from app.models.profile import Profile, ProfileGroupLimit
 from app.models.schedule_type import ScheduleType
-from app.routers.deps import get_current_user, get_current_manager
+from app.routers.deps import get_current_manager, get_current_user
 from app.services.audit import log_action
-from app.models.audit import AuditAction
-import uuid
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
@@ -23,19 +24,19 @@ class GroupLimitOut(BaseModel):
 class ProfileOut(BaseModel):
     id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     is_default: bool
     is_custom: bool
     is_system: bool
-    group_limits: List[GroupLimitOut] = []
+    group_limits: list[GroupLimitOut] = []
 
     model_config = {"from_attributes": True}
 
 
 class ProfileWrite(BaseModel):
     name: str
-    description: Optional[str] = None
-    limits: Dict[str, int] = {}   # {group_name: max_quantity}
+    description: str | None = None
+    limits: dict[str, int] = {}   # {group_name: max_quantity}
 
 
 class GroupTypeOut(BaseModel):
@@ -45,10 +46,10 @@ class GroupTypeOut(BaseModel):
 
 class GroupOut(BaseModel):
     group_name: str
-    types: List[GroupTypeOut]
+    types: list[GroupTypeOut]
 
 
-def _ordered_groups(db: Session) -> List[str]:
+def _ordered_groups(db: Session) -> list[str]:
     """Grupos na ordem de exibição dos tipos."""
     types = db.query(ScheduleType).order_by(ScheduleType.display_order, ScheduleType.name).all()
     seen: list[str] = []
@@ -59,14 +60,14 @@ def _ordered_groups(db: Session) -> List[str]:
     return seen
 
 
-@router.get("/", response_model=List[ProfileOut], dependencies=[Depends(get_current_user)])
+@router.get("/", response_model=list[ProfileOut], dependencies=[Depends(get_current_user)])
 def list_profiles(db: Session = Depends(get_db)):
     # Ordena: fixos primeiro, depois custom/default no fim
     profiles = db.query(Profile).order_by(Profile.is_custom, Profile.is_default, Profile.name).all()
     return profiles
 
 
-@router.get("/groups", response_model=List[GroupOut], dependencies=[Depends(get_current_user)])
+@router.get("/groups", response_model=list[GroupOut], dependencies=[Depends(get_current_user)])
 def list_groups(db: Session = Depends(get_db)):
     types = db.query(ScheduleType).filter(ScheduleType.is_active == True)\
         .order_by(ScheduleType.display_order, ScheduleType.name).all()
@@ -77,7 +78,7 @@ def list_groups(db: Session = Depends(get_db)):
     return [GroupOut(group_name=g, types=ts) for g, ts in grupos.items()]
 
 
-def _set_limits(db: Session, profile: Profile, limits: Dict[str, int]):
+def _set_limits(db: Session, profile: Profile, limits: dict[str, int]):
     existing = {gl.group_name: gl for gl in profile.group_limits}
     valid_groups = set(_ordered_groups(db))
     for group, qty in limits.items():

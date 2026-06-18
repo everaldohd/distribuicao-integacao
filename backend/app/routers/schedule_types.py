@@ -1,16 +1,17 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+
 from app.core.database import get_db
 from app.models.schedule_type import ScheduleType
-from app.schemas.schedule_type import ScheduleTypeCreate, ScheduleTypeUpdate, ScheduleTypeOut
 from app.routers.deps import get_current_manager
-import uuid
+from app.schemas.schedule_type import ScheduleTypeCreate, ScheduleTypeOut, ScheduleTypeUpdate
 
 router = APIRouter(prefix="/schedule-types", tags=["schedule-types"])
 
 
-@router.get("/", response_model=List[ScheduleTypeOut])
+@router.get("/", response_model=list[ScheduleTypeOut])
 def list_types(db: Session = Depends(get_db)):
     return db.query(ScheduleType).order_by(ScheduleType.display_order, ScheduleType.name).all()
 

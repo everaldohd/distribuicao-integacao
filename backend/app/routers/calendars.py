@@ -1,17 +1,18 @@
 import calendar
+import uuid
 from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+
 from app.core.database import get_db
-from app.models.operational_calendar import OperationalCalendar, CalendarDay, DayCoverage, DayCategory, CalendarStatus
-from app.models.schedule_type import ScheduleType
-from app.schemas.calendar import CalendarCreate, CalendarOut, DayOverrideRequest, CoverageTemplateSet
-from app.routers.deps import get_current_manager, get_current_user
-from app.models.user import User
-from app.services.audit import log_action
 from app.models.audit import AuditAction
-import uuid
+from app.models.operational_calendar import CalendarDay, CalendarStatus, DayCategory, DayCoverage, OperationalCalendar
+from app.models.schedule_type import ScheduleType
+from app.models.user import User
+from app.routers.deps import get_current_manager, get_current_user
+from app.schemas.calendar import CalendarCreate, CalendarOut, CoverageTemplateSet, DayOverrideRequest
+from app.services.audit import log_action
 
 router = APIRouter(prefix="/calendars", tags=["calendars"])
 
@@ -70,7 +71,7 @@ def _apply_default_coverage(cal: OperationalCalendar, db: Session) -> int:
     return dias_atualizados
 
 
-@router.get("/", response_model=List[CalendarOut], dependencies=[Depends(get_current_user)])
+@router.get("/", response_model=list[CalendarOut], dependencies=[Depends(get_current_user)])
 def list_calendars(db: Session = Depends(get_db)):
     return db.query(OperationalCalendar).order_by(OperationalCalendar.year.desc(), OperationalCalendar.month.desc()).all()
 

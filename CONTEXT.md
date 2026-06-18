@@ -60,8 +60,8 @@ Justiça mantida por **saldo de compensação** acumulado por perito.
 - **historical_balance.py** — `HistoricalBalance` · `BalanceConfig` (+ `preference_factor`).
 - **unavailability.py**, **exchange.py**, **audit.py** (`AuditLog` + `SolverAudit`).
 
-> Migrações pontuais já aplicadas: `migrate_profiles.py`, `migrate_preferences.py`.
-> Colunas novas em tabelas existentes foram via `ALTER TABLE` (o projeto usa `create_all` + Alembic).
+> Schema gerenciado por **Alembic** (migration inicial em `alembic/versions/`). `alembic upgrade head`
+> roda no startup do backend; em instalação nova cria tudo. O `create_all` foi aposentado.
 
 ---
 

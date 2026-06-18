@@ -1,13 +1,15 @@
-import uuid
 import secrets
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from pydantic import BaseModel
-from app.core.database import get_db
+from sqlalchemy.orm import Session
+
 from app.core.config import settings
-from app.core.security import verify_password, create_access_token, hash_password
+from app.core.database import get_db
 from app.core.logging import get_logger
+from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas.user import LoginRequest, Token
 
@@ -56,7 +58,7 @@ def sso_login(data: SSORequest, db: Session = Depends(get_db)):
             options={"require": ["exp"]},
         )
     except JWTError as e:
-        raise HTTPException(status_code=401, detail=f"Token do NEO inválido ou expirado: {e}")
+        raise HTTPException(status_code=401, detail=f"Token do NEO inválido ou expirado: {e}") from e
 
     matricula = str(claims.get("matricula") or "").strip()
     email = str(claims.get("email") or "").strip().lower()
@@ -91,11 +93,14 @@ def sso_login(data: SSORequest, db: Session = Depends(get_db)):
         # Mantém matrícula/e-mail/nome sincronizados com o NEO
         changed = False
         if matricula and user.matricula != matricula:
-            user.matricula = matricula; changed = True
+            user.matricula = matricula
+            changed = True
         if email and user.email != email:
-            user.email = email; changed = True
+            user.email = email
+            changed = True
         if name and user.name != name:
-            user.name = name; changed = True
+            user.name = name
+            changed = True
         if changed:
             db.commit()
 

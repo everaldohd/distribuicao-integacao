@@ -17,16 +17,17 @@ Status geral:
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.core.database import get_db
+
 from app.core.config import settings
+from app.core.database import get_db
 from app.core.logging import get_logger
-from app.routers.deps import get_current_manager
-from app.models.user import User
-from app.models.schedule_type import ScheduleType
-from app.models.profile import Profile
 from app.models.historical_balance import BalanceConfig
 from app.models.operational_calendar import OperationalCalendar
+from app.models.profile import Profile
 from app.models.schedule import Schedule
+from app.models.schedule_type import ScheduleType
+from app.models.user import User
+from app.routers.deps import get_current_manager
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])

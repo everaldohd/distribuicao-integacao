@@ -1,11 +1,13 @@
 """Validação de trocas de escala contra regras operacionais rígidas."""
 from dataclasses import dataclass, field
 from datetime import timedelta
+
 from sqlalchemy.orm import Session
-from app.models.schedule import Assignment
-from app.models.unavailability import Unavailability
+
 from app.models.eligibility import Eligibility
+from app.models.schedule import Assignment
 from app.models.schedule_type import ScheduleType
+from app.models.unavailability import Unavailability
 
 
 @dataclass

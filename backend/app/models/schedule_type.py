@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, Integer, DateTime, func
+
+from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.database import Base
 
 
@@ -24,7 +26,6 @@ class ScheduleType(Base):
 
     # Relationships
     eligibilities: Mapped[list["Eligibility"]] = relationship("Eligibility", back_populates="schedule_type")
-    profile_rules: Mapped[list["ProfileRule"]] = relationship("ProfileRule", back_populates="schedule_type")
     assignments: Mapped[list["Assignment"]] = relationship("Assignment", back_populates="schedule_type")
     day_coverages: Mapped[list["DayCoverage"]] = relationship("DayCoverage", back_populates="schedule_type")
 

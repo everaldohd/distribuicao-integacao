@@ -31,27 +31,25 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from typing import Optional
 
 from ortools.sat.python import cp_model
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.logging import get_logger
-
-logger = get_logger(__name__)
-from app.models.operational_calendar import OperationalCalendar
-from app.models.schedule import Schedule, Assignment, ScheduleStatus
-from app.models.schedule_type import ScheduleType
-from app.models.user import User
-from app.models.preference import UserPreference, PreferenceType
-from app.models.unavailability import Unavailability
-from app.models.historical_balance import HistoricalBalance
-from app.models.eligibility import Eligibility
-from app.models.profile import Profile, ProfileGroupLimit, UserGroupLimit
 from app.models.audit import SolverAudit
+from app.models.eligibility import Eligibility
+from app.models.historical_balance import HistoricalBalance
+from app.models.operational_calendar import OperationalCalendar
+from app.models.preference import PreferenceType, UserPreference
+from app.models.profile import Profile, ProfileGroupLimit, UserGroupLimit
+from app.models.schedule import Assignment, Schedule, ScheduleStatus
+from app.models.schedule_type import ScheduleType
+from app.models.unavailability import Unavailability
+from app.models.user import User
 from app.schemas.schedule import SimulationResult
 
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Pesos da função objetivo
@@ -67,7 +65,7 @@ WEIGHT_LOAD_EQUITY = 50     # penalidade por desvio de carga
 class _UserData:
     id: str
     name: str
-    profile_id: Optional[str]
+    profile_id: str | None
     eligible_type_ids: set = field(default_factory=set)
     unavailable_dates: set = field(default_factory=set)
     # Preferências por modalidade: conjuntos de (date, type_id). *_any = preferências sem tipo.
@@ -293,7 +291,6 @@ class ScheduleSolver:
     def simulate(self) -> SimulationResult:
         """Estimativa rápida sem executar o solver."""
         total_slots = sum(self.coverage.values())
-        day_dates = [d.date for d in self.days]
 
         # Usuários elegíveis para ao menos um tipo
         eligible_users = [u for u in self.users if u.eligible_type_ids]
@@ -441,7 +438,7 @@ class ScheduleSolver:
         objective_terms = []
 
         # Minimizar gaps (buracos)
-        for (d, t_id), g in gap.items():
+        for g in gap.values():
             objective_terms.append(-WEIGHT_GAP * g)
 
         # Maximizar preferências atendidas / penalizar datas evitadas

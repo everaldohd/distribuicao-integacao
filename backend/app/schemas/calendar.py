@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
 from datetime import date
-from typing import Optional, List
-from app.models.operational_calendar import DayCategory, CalendarStatus
+
+from pydantic import BaseModel, Field
+
+from app.models.operational_calendar import CalendarStatus, DayCategory
 
 
 class CalendarCreate(BaseModel):
@@ -14,8 +15,8 @@ class DayCoverageOut(BaseModel):
     schedule_type_name: str
     quantity: int
     is_overridden: bool
-    override_reason: Optional[str]
-    original_quantity: Optional[int]
+    override_reason: str | None
+    original_quantity: int | None
 
     model_config = {"from_attributes": True}
 
@@ -24,8 +25,8 @@ class CalendarDayOut(BaseModel):
     id: str
     date: date
     category: DayCategory
-    category_override_reason: Optional[str]
-    coverages: List[DayCoverageOut]
+    category_override_reason: str | None
+    coverages: list[DayCoverageOut]
 
     model_config = {"from_attributes": True}
 
@@ -35,17 +36,17 @@ class CalendarOut(BaseModel):
     year: int
     month: int
     status: CalendarStatus
-    days: List[CalendarDayOut]
+    days: list[CalendarDayOut]
 
     model_config = {"from_attributes": True}
 
 
 class DayOverrideRequest(BaseModel):
-    category: Optional[DayCategory] = None
-    category_reason: Optional[str] = None
+    category: DayCategory | None = None
+    category_reason: str | None = None
     # cobertura: dict {schedule_type_id: quantity}
-    coverage_overrides: Optional[dict[str, int]] = None
-    coverage_reason: Optional[str] = None
+    coverage_overrides: dict[str, int] | None = None
+    coverage_reason: str | None = None
 
 
 class CoverageTemplateSet(BaseModel):

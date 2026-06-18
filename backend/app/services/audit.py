@@ -1,18 +1,19 @@
-from sqlalchemy.orm import Session
-from app.models.audit import AuditLog, AuditAction
-from typing import Optional
 import uuid
+
+from sqlalchemy.orm import Session
+
+from app.models.audit import AuditAction, AuditLog
 
 
 def log_action(
     db: Session,
-    performed_by_id: Optional[str],
+    performed_by_id: str | None,
     action: AuditAction,
     entity_type: str,
-    entity_id: Optional[str] = None,
-    previous_value: Optional[dict] = None,
-    new_value: Optional[dict] = None,
-    description: Optional[str] = None,
+    entity_id: str | None = None,
+    previous_value: dict | None = None,
+    new_value: dict | None = None,
+    description: str | None = None,
 ):
     log = AuditLog(
         id=str(uuid.uuid4()),

@@ -1,23 +1,25 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List, Optional
-from pydantic import BaseModel
-from app.core.database import get_db
-from app.models.schedule import Schedule, Assignment, ScheduleStatus
-from app.models.user import User
-from app.schemas.schedule import ScheduleOut, ScheduleSummary, ManualFillRequest, SimulationResult
-from app.routers.deps import get_current_manager, get_current_user
-from app.services.audit import log_action
-from app.models.audit import AuditAction
-from app.workers.tasks import run_solver_task
-from app.core.logging import get_logger
 import uuid
+from datetime import UTC
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.logging import get_logger
+from app.models.audit import AuditAction
+from app.models.schedule import Assignment, Schedule, ScheduleStatus
+from app.models.user import User
+from app.routers.deps import get_current_manager, get_current_user
+from app.schemas.schedule import ManualFillRequest, ScheduleOut, ScheduleSummary, SimulationResult
+from app.services.audit import log_action
+from app.workers.tasks import run_solver_task
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
 
-@router.get("/", response_model=List[ScheduleSummary], dependencies=[Depends(get_current_user)])
+@router.get("/", response_model=list[ScheduleSummary], dependencies=[Depends(get_current_user)])
 def list_schedules(db: Session = Depends(get_db)):
     return db.query(Schedule).order_by(Schedule.year.desc(), Schedule.month.desc(), Schedule.version.desc()).all()
 
@@ -102,7 +104,7 @@ def publish(
     db: Session = Depends(get_db),
     manager: User = Depends(get_current_manager),
 ):
-    from datetime import datetime, timezone
+    from datetime import datetime
     s = db.get(Schedule, schedule_id)
     if not s:
         raise HTTPException(status_code=404, detail="Escala não encontrada")
@@ -110,11 +112,11 @@ def publish(
         raise HTTPException(status_code=400, detail="Apenas escalas geradas podem ser publicadas")
 
     s.status = ScheduleStatus.PUBLISHED
-    s.published_at = datetime.now(timezone.utc)
+    s.published_at = datetime.now(UTC)
     s.published_by_id = manager.id
 
     # Finaliza o calendário do mês (Aberto → Finalizado)
-    from app.models.operational_calendar import OperationalCalendar, CalendarStatus
+    from app.models.operational_calendar import CalendarStatus, OperationalCalendar
     cal = db.get(OperationalCalendar, s.calendar_id)
     if cal:
         cal.status = CalendarStatus.LOCKED
@@ -132,8 +134,8 @@ def publish(
 
 
 class AssignmentEdit(BaseModel):
-    user_id: Optional[str] = None  # None => transforma a vaga em buraco
-    reason: Optional[str] = None   # justificativa (obrigatória após publicação)
+    user_id: str | None = None  # None => transforma a vaga em buraco
+    reason: str | None = None   # justificativa (obrigatória após publicação)
 
 
 @router.patch("/{schedule_id}/assignments/{assignment_id}")

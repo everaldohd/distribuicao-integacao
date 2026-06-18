@@ -2,18 +2,18 @@
 Script de seed: cria o primeiro gestor, usuário de teste, tipos de escala e config de saldo.
 Execute com: python -m app.seed
 """
-from app.core.database import SessionLocal, engine
-from app.core.database import Base
-from app.core.security import hash_password
-from app.core.config import settings
-from app.models.user import User
-from app.models.schedule_type import ScheduleType
-from app.models.historical_balance import BalanceConfig
 import uuid
+
+from app.core.config import settings
+from app.core.database import SessionLocal
+from app.core.security import hash_password
+from app.models.historical_balance import BalanceConfig
+from app.models.schedule_type import ScheduleType
+from app.models.user import User
 
 
 def seed():
-    Base.metadata.create_all(bind=engine)
+    # O schema é gerenciado pelo Alembic (alembic upgrade head no startup).
     db = SessionLocal()
     try:
         # Gestor admin

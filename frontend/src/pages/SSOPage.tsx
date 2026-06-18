@@ -18,7 +18,7 @@ export function SSOPage() {
       setError('Token de acesso do NEO não informado.')
       return
     }
-    ;(async () => {
+    void (async () => {
       try {
         await ssoLogin(token)
         const user = await getMe()
@@ -27,6 +27,8 @@ export function SSOPage() {
         setError(e?.response?.data?.detail ?? 'Não foi possível autenticar pela integração NEO.')
       }
     })()
+    // Executa apenas uma vez na montagem (token vem da URL)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (

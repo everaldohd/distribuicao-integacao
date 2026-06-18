@@ -10,14 +10,14 @@ import random
 import uuid
 from datetime import date, timedelta
 
-from app.core.database import SessionLocal, engine, Base
+from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
-from app.models.user import User
-from app.models.profile import Profile, ProfileGroupLimit
 from app.models.eligibility import Eligibility
-from app.models.schedule_type import ScheduleType
-from app.models.preference import UserPreference, PreferenceType
 from app.models.historical_balance import HistoricalBalance
+from app.models.preference import PreferenceType, UserPreference
+from app.models.profile import Profile
+from app.models.schedule_type import ScheduleType
+from app.models.user import User
 
 SEED = 42
 random.seed(SEED)
