@@ -1,5 +1,9 @@
 # Sistema de Gestão e Distribuição de Escalas
 
+> **Status:** protótipo funcional — **não está em produção**; os dados do banco são de teste e
+> podem ser descartados a qualquer momento. A especificação de negócio está em **[SPEC.md](SPEC.md)**
+> (serve de base para manutenção ou reimplementação em outro stack).
+
 Aplicação web para **planejar, distribuir e auditar escalas de serviço** de peritos.
 A distribuição **não é por sorteio**: um otimizador matemático (Google OR-Tools / CP-SAT)
 encontra a alocação mais justa respeitando regras rígidas (elegibilidade, cotas, interstício,

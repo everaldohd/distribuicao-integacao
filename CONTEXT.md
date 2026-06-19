@@ -1,7 +1,9 @@
 # CONTEXT – Sistema de Gestão e Distribuição de Escalas
 
 > Referência rápida para retomar sessões. Leia antes de mexer no projeto.
-> Documentação completa: **[README.md](README.md)**. Especificação original: **SPEC.md**.
+> Documentação completa: **[README.md](README.md)**. Especificação funcional atualizada: **[SPEC.md](SPEC.md)**.
+> **Status:** protótipo (não está em produção; dados do banco são de teste e descartáveis).
+> Pode haver migração futura para Java/Spring Boot + Angular — SPEC.md serve de especificação.
 
 ---
 
@@ -27,7 +29,12 @@ Justiça mantida por **saldo de compensação** acumulado por perito.
 - ✅ **Preferências por MODALIDADE** com limite = cota_grupo × fator (separado p/ desejo/evitar).
 - ✅ Editor visual de calendário (cobertura por dia) e de escala (reatribuir vagas).
 - ✅ Calendário vira **Finalizado** ao publicar; escala publicada editável só **com justificativa**.
-- ✅ Ranking inclui todos os peritos ativos; saldo imutável p/ quem não tem elegibilidade.
+- ✅ Ranking inclui quem tem perfil (rotação); saldo imutável p/ quem não tem elegibilidade.
+- ✅ **Trocas 1:1 mesmo grupo** com aprovação do gestor + antecedência; **escala geral pública**.
+- ✅ **Pesos do solver configuráveis** pelo gestor (Saldo/Ranking); **tooltips (ⓘ)** nas configs.
+- ✅ **Papel é só permissão**: gestor também pode ser escalado e vê "Minha área" + "Gestão".
+- ✅ "Meu Saldo" explicado (arredondado, histórico por eventos, sem normalização exposta).
+- ✅ Auditoria completa + tela; endpoint de **diagnóstico**; testes (pytest+vitest), lint, CI.
 - ✅ **SSO NEO** preparado (endpoint + rota), **desativado por padrão** (`NEO_SSO_SECRET` vazio).
 
 ---

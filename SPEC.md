@@ -1,494 +1,293 @@
-# Especificação Funcional – Sistema Inteligente de Gestão e Distribuição de Escalas
+# Especificação Funcional – Sistema de Gestão e Distribuição de Escalas
+
+> **Status:** protótipo funcional (não está em produção; dados do banco são de teste e podem ser descartados).
+> Este documento descreve o **comportamento atual** do sistema e serve de especificação para manutenção
+> ou reimplementação em outro stack (ex.: Java/Spring Boot + Angular). A lógica de negócio descrita aqui
+> independe da linguagem.
 
 ## Objetivo
 
-Desenvolver um sistema web para gerenciamento, distribuição, publicação, auditoria e troca de escalas de serviço, utilizando otimização matemática para garantir distribuição justa, transparente e auditável.
-
-O sistema deverá permitir que gestores configurem a necessidade operacional de cada período e que os usuários informem preferências, enquanto um motor de otimização distribui as escalas respeitando restrições e compensando historicamente os usuários mais prejudicados.
-
-O sistema não deve ser baseado em sorteio aleatório.
-
-Toda distribuição deverá ser produzida por otimização matemática reproduzível e auditável.
+Sistema web para gerenciar, distribuir, publicar, auditar e trocar escalas de serviço de peritos,
+usando **otimização matemática** (não sorteio) para uma distribuição **justa, transparente e auditável**.
+Gestores configuram a necessidade operacional e as regras; peritos informam preferências; um motor de
+otimização distribui as escalas respeitando restrições rígidas e compensando historicamente quem foi
+mais prejudicado.
 
 ---
 
-# Arquitetura
+# Arquitetura (implementação atual)
 
-## Backend
+- **Backend:** Python · FastAPI · SQLAlchemy 2.0 · PostgreSQL · Pydantic v2 · JWT (python-jose/bcrypt)
+- **Otimização:** Google OR-Tools, solver **CP-SAT** com `random_seed` fixo (reprodutível)
+- **Assíncrono:** Celery + Redis (geração da escala roda em background)
+- **Migrations:** Alembic · **Frontend:** React + TypeScript + Vite + TanStack Query + Tailwind
+- **Qualidade:** testes (pytest + vitest), lint (ruff + eslint), CI (GitHub Actions)
+- **Orquestração:** Docker Compose (serviços: db, redis, backend, worker, frontend) · Monorepo `backend/` + `frontend/`
 
-* Python
-* FastAPI
-* SQLAlchemy
-* PostgreSQL
-* Celery e Redis para execução assíncrona do motor de otimização em background, evitando bloqueio de thread no endpoint da API.
-
-## Motor de Otimização
-
-* Google OR-Tools
-* Solver CP-SAT com `random_seed` fixo para garantir reprodutibilidade total.
-
-## Frontend
-
-* React + TypeScript
-* Interface web responsiva.
-* Separação entre Área do Gestor e Área do Usuário.
-* Frontend desacoplado via API REST.
-
-## Organização
-
-Monorepo com pastas `backend/` e `frontend/`.
+Os quatro motores conceituais: **Cobertura** (quantas vagas por dia/tipo), **Distribuição** (otimização),
+**Compensação** (saldo histórico de justiça) e **Trocas** (alterações pós-publicação sem mexer no histórico).
 
 ---
 
-# Conceitos Gerais
+# Papéis
 
-O sistema é dividido em quatro motores principais:
-
-## Motor de Cobertura
-
-Define quantas vagas existem em cada dia e em cada tipo de escala.
-
-## Motor de Distribuição
-
-Executa a otimização matemática para atribuição das escalas.
-
-## Motor de Compensação
-
-Mantém histórico de justiça e equilíbrio ao longo do tempo.
-
-## Motor de Trocas
-
-Permite alterações posteriores sem impactar o histórico oficial utilizado pelo algoritmo.
+- **Gestor** é apenas o papel **administrativo** (acesso às telas de configuração, geração, publicação, auditoria).
+  **O papel NÃO define se a pessoa pode ser escalada.** Um gestor também pode ser perito e ser escalado
+  normalmente — basta ter perfil + elegibilidade. Gestores enxergam tanto a "Gestão" quanto a "Minha área".
+- **Quem pode ser escalado** é definido por **perfil (cota) + elegibilidade**, para qualquer usuário.
+- Múltiplos gestores são permitidos. O primeiro é criado por seed/variável de ambiente. Não há auto-cadastro.
 
 ---
 
-# Tipos de Escala
+# Tipos de Escala e Grupos
 
-O sistema deve permitir cadastro de tipos de escala configuráveis (apenas turnos diurnos).
+Tipos configuráveis (turnos diurnos). Cada tipo pertence a um **grupo** e tem um **peso** dentro do grupo:
 
-Tipos iniciais:
+| Tipo | Grupo | Peso |
+|---|---|---|
+| Plantão 12h | Plantão | 1 |
+| Reserva Manhã | Reserva | 1 |
+| Reserva Tarde | Reserva | 1 |
+| Reserva 12h | Reserva | **2** |
+| Pátio Manhã | Pátio | 1 |
+| Pátio Tarde | Pátio | 1 |
 
-* Plantão 12h
-* Reserva Manhã
-* Reserva Tarde
-* Reserva 12h
-* Pátio Manhã
-* Pátio Tarde
-
-Novos tipos poderão ser adicionados futuramente sem alteração estrutural.
+O **peso** existe porque a cota e a troca são por grupo: uma Reserva 12h "consome" 2 reservas.
 
 ---
 
 # Elegibilidade
 
-Cada usuário poderá ser elegível ou inelegível para cada tipo de escala.
+Cada perito é elegível ou não para cada tipo de escala. O algoritmo só considera candidatos elegíveis.
 
-Exemplo:
-
-| Tipo    | Elegível |
-| ------- | -------- |
-| Plantão | Sim      |
-| Reserva | Sim      |
-| Pátio   | Não      |
-
-O algoritmo somente poderá considerar candidatos elegíveis.
+**Sincronização automática:** ao trocar o perfil de um perito, suas elegibilidades são realinhadas aos
+grupos liberados pelo novo perfil (habilita os tipos dos grupos com cota > 0, desabilita os demais),
+evitando inconsistência. O gestor pode ajustar manualmente depois.
 
 ---
 
-# Perfis de Distribuição
+# Perfis de Distribuição (cota por GRUPO)
 
-O sistema deverá permitir que o gestor crie perfis personalizados.
+Cada perfil define a **cota MÁXIMA por grupo** (Plantão / Reserva / Pátio) que o perito recebe no mês —
+ponderada (Reserva 12h conta 2). Perfis do sistema:
 
-Cada perfil define quantas atribuições de cada tipo deverão ser distribuídas ao usuário durante o mês.
+| Perfil | Plantão | Reserva | Pátio |
+|---|---|---|---|
+| Lotado na Interna | 1 | 2 | 0 |
+| Lotado na Interna com Restrição | 0 | 0 | 1 |
+| Lotado na Externa | 0 | 0 | 0 |
+| Chefe | 1 | 2 | 0 |
+| Direção | 0 | 0 | 0 |
+| **Fora do Integração** (padrão de quem não tem perfil) | 0 | 0 | 0 |
+| **Personalizado** | cota individual por perito |
 
-Exemplo:
+- O gestor pode **criar novos perfis** e editar as cotas de cada um.
+- Ao editar a cota de **um perito específico**, ele migra automaticamente para **Personalizado** (cota individual).
+- Quem não tem perfil cai no padrão **Fora do Integração** (cotas zeradas → não é escalado).
 
-Perfil 1:
-
-* Plantão 12h: 1
-* Reserva 12h: 0
-* Reserva Manhã: 1
-* Reserva Tarde: 1
-* Pátio Manhã: 0
-* Pátio Tarde: 0
-
-Perfil 2:
-
-* Plantão 12h: 4
-* Reserva 12h: 4
-
-Perfil 3:
-
-* Pátio Manhã: 4
-* Pátio Tarde: 4
-
-Os nomes dos perfis serão definidos livremente pelo gestor.
-
-Exceções individuais poderão sobrescrever os valores do perfil para um usuário específico.
-
-Quando uma exceção individual torna a cobertura de um dia inviável (ex.: reduz demais o pool disponível), o sistema trata o turno como buraco na escala — não como erro de configuração.
+> A cota é por grupo (não por tipo). O modelo antigo de "cota por tipo + exceções individuais" foi substituído.
 
 ---
 
 # Calendário Operacional
 
-Ao criar um mês, o sistema deverá classificar automaticamente:
+Ao criar um mês, os dias são classificados automaticamente: seg–sex = Dia útil; sáb/dom = Final de semana.
+O gestor pode reclassificar qualquer dia (Dia útil / Final de semana / Feriado). Não há feriados automáticos.
 
-* Segunda a sexta: Dia útil
-* Sábado: Final de semana
-* Domingo: Final de semana
+## Modelo de Cobertura (vagas por dia/tipo)
 
-O gestor poderá alterar manualmente qualquer data para:
+O gestor aplica um modelo padrão por categoria de dia (e pode editar dia a dia, com motivo auditado):
 
-* Dia útil
-* Final de semana
-* Feriado
+- **Dia útil:** 1 Plantão 12h, 1 Reserva Manhã, 1 Reserva Tarde, 1 Pátio Manhã, 1 Pátio Tarde
+- **Fim de semana:** 1 Plantão 12h, 1 Reserva 12h
 
-O sistema não deverá depender de feriados automáticos.
-
-A classificação final sempre será definida pelo gestor.
+O calendário começa em **Rascunho**, passa a **Aberto** (recebe preferências e gera escala) e vira
+**Finalizado** quando a escala daquele mês é publicada.
 
 ---
 
-# Modelo de Cobertura
+# Preferências dos Usuários (por MODALIDADE)
 
-O gestor configura um modelo padrão para cada categoria de dia.
+Antes da publicação, o perito registra preferências **por modalidade** (tipo de escala), não só por dia:
 
-## Exemplo – Dias Úteis
-
-| Tipo          | Quantidade |
-| ------------- | ---------: |
-| Plantão 12h   |          2 |
-| Reserva Manhã |          1 |
-| Reserva Tarde |          1 |
-| Reserva 12h   |          0 |
-| Pátio Manhã   |          1 |
-| Pátio Tarde   |          1 |
-
-## Exemplo – Finais de Semana
-
-| Tipo          | Quantidade |
-| ------------- | ---------: |
-| Plantão 12h   |          1 |
-| Reserva Manhã |          0 |
-| Reserva Tarde |          0 |
-| Reserva 12h   |          1 |
-| Pátio Manhã   |          0 |
-| Pátio Tarde   |          0 |
-
-## Exemplo – Feriados
-
-| Tipo        | Quantidade |
-| ----------- | ---------: |
-| Plantão 12h |          1 |
-| Reserva 12h |          1 |
-
-Após gerar o calendário do mês, o gestor poderá alterar individualmente qualquer dia.
-
-Todas as alterações devem ficar registradas na auditoria com motivo.
-
----
-
-# Preferências dos Usuários
-
-Antes da geração da escala, o usuário poderá informar:
-
-## Datas Desejadas
-
-Datas que prefere trabalhar.
-
-## Datas a Evitar
-
-Datas que prefere evitar.
-
-Essas informações são preferências — não restrições obrigatórias.
+- Modos separados: **Desejo trabalhar** e **Prefiro não**.
+- Botões por modalidade liberada pelo perfil (grupos com cota > 0), cada um com cor.
+- Só é possível marcar dias em que o **calendário oferece aquela modalidade**.
+- **Limite de dias** = cota do grupo × **fator global** (configurável pelo gestor), contado
+  **separadamente** para desejo e evitar.
+- São preferências, não obrigações.
+- Após a publicação do mês, a agenda fica **somente leitura**: os dias escalados aparecem em dourado e as
+  preferências continuam visíveis apenas como registro.
 
 ---
 
 # Indisponibilidades
 
-Serão cadastradas pelo gestor.
-
-Tipos iniciais:
-
-* Férias
-* Abonos
-* Licenças
-
-O algoritmo nunca poderá escalar usuários em períodos indisponíveis.
+Cadastradas pelo gestor: **Férias, Abono, Licença** (período). O algoritmo nunca escala em período indisponível.
 
 ---
 
 # Regras Operacionais
 
-## Restrições Rígidas
+## Restrições Rígidas (nunca violadas)
 
-Jamais podem ser violadas.
+- Não escalar em férias/abono/licença.
+- No máximo 1 escala por perito por dia.
+- Não atribuir Plantão 12h em dias seguidos ao mesmo perito.
+- **Interstício:** nenhuma escala no dia seguinte a um Plantão 12h. Vale também na **borda do mês**
+  (consulta a versão publicada do mês anterior para bloquear o dia 1 se necessário).
+- Respeitar elegibilidade.
+- Respeitar a **cota por grupo** (ponderada).
 
-* Não escalar durante férias, abonos ou licenças.
-* Não atribuir mais de uma escala ao mesmo usuário no mesmo dia.
-* Não atribuir Plantão de 12h em dias seguidos para o mesmo usuário.
-* Não atribuir nenhuma escala (qualquer tipo) no dia imediatamente seguinte a um Plantão de 12h (interstício obrigatório). **Essa restrição aplica-se também na borda do mês**: se um usuário fez Plantão 12h no último dia do mês anterior (versão publicada), ele não poderá receber nenhuma escala no dia 1 do mês sendo gerado. O algoritmo deverá consultar o mês anterior para verificar essa condição.
-* Respeitar elegibilidade.
-* Respeitar cotas do perfil.
-* Respeitar exceções individuais.
+## Restrições Suaves (otimizadas) — pesos configuráveis pelo gestor
 
-## Restrições Suaves
+Prioridade efetiva (do mais forte ao mais fraco), com pesos padrão:
 
-Devem ser maximizadas ou minimizadas.
+1. **Evitar buracos** (vaga vazia) — peso 100.000 (dominante)
+2. **Justiça (saldo)** — quem tem saldo alto é escalado **menos** (até ~1.000 por turno)
+3. **Atender datas desejadas** — +300
+4. **Evitar datas indesejadas** — −200
+5. **Equilíbrio de carga** — −50 por desvio
 
-* Atender datas desejadas.
-* Evitar datas indesejadas.
-* Equilibrar distribuição histórica.
-* Reduzir concentração de datas desfavoráveis.
-* Favorecer usuários historicamente mais prejudicados.
+Todos esses pesos são editáveis pelo gestor.
 
-## Tratamento de Inviabilidade (Buracos na Escala)
+## Buracos na Escala
 
-Caso não haja quantidade suficiente de usuários elegíveis e disponíveis para cobrir as vagas de um determinado dia, o motor de otimização não deve travar ou falhar.
-
-O algoritmo deverá utilizar variáveis de folga para deixar o turno em branco. A interface exibirá esse espaço como um "buraco na escala" com alerta visual, indicando que o gestor deve solucionar a falta de efetivo manualmente (preenchimento manual disponível na Área do Gestor).
+Se faltam peritos elegíveis/disponíveis, o solver **não falha**: usa variável de folga e deixa a vaga
+vazia ("buraco"), sinalizada na interface, para o gestor preencher manualmente.
 
 ---
 
 # Saldo Histórico de Compensação
 
-Cada usuário possui um saldo acumulado.
+Cada perito tem um saldo acumulado, que o acompanha mesmo mudando de função/elegibilidade.
 
-O saldo acompanha o usuário independentemente de mudanças de função ou elegibilidade.
+| Evento | Valor padrão (configurável) |
+|---|---|
+| Mês sem escala | −10 |
+| Data desejada atendida | −5 |
+| Escala comum | 0 |
+| Data evitada atribuída | +10 |
 
-Valores padrão:
+- **Saldo positivo = prejudicado** → será **poupado** (escalado menos). **Negativo = poupado** → escalado mais.
+- **Novo usuário** entra com a **média** dos saldos ativos (nivelado com a equipe).
+- **Normalização mensal:** subtrai a média geral de todos, preservando diferenças relativas e evitando
+  inflação/deflação infinita.
+- **Imutável para quem não pode ser escalado:** perito sem nenhuma elegibilidade não recebe penalidade
+  nem entra na normalização (saldo congelado).
+- O **ranking** inclui todos que estão na rotação (têm perfil), independentemente de serem gestores.
 
-| Evento                 | Valor |
-| ---------------------- | ----: |
-| Mês sem escala         |   -10 |
-| Data desejada atendida |    -5 |
-| Escala comum           |     0 |
-| Data evitada atribuída |   +10 |
+## Congelamento do Histórico
 
-Os valores deverão ser configuráveis por gestores.
-
-O algoritmo deverá priorizar usuários com maior saldo acumulado.
-
-## Entrada de Novos Usuários
-
-Ao cadastrar um novo usuário, seu saldo histórico inicial será a média matemática dos saldos atuais de todos os usuários ativos, garantindo que ele entre nivelado com a equipe.
-
-## Normalização (Deflação)
-
-Após o fechamento de cada ciclo mensal, caso a média geral dos saldos sofra inflação ou deflação sistêmica, o sistema deverá aplicar um fator de normalização, subtraindo a média geral do saldo de cada usuário. Isso preserva as diferenças relativas e evita crescimento infinito dos números.
-
----
-
-# Congelamento do Histórico
-
-O saldo histórico será calculado exclusivamente com base na versão publicada da escala.
-
-Trocas posteriores não alteram o saldo.
-
-Exemplo: Agosto publicado → saldo calculado. Trocas realizadas posteriormente não afetam o saldo utilizado na geração de setembro.
-
----
-
-# Fluxo de Geração
-
-1. Gestor configura o mês.
-2. Gestor cadastra férias e abonos.
-3. Usuários informam preferências.
-4. Gestor executa simulação.
-5. Gestor gera a escala.
-6. Gestor realiza ajustes manuais.
-7. Gestor publica a escala.
-
----
-
-# Simulação
-
-Antes da geração definitiva, o sistema deverá apresentar:
-
-* Quantidade total de vagas.
-* Quantidade de usuários elegíveis.
-* Percentual estimado de preferências atendidas.
-* Quantidade estimada de datas evitadas atribuídas.
-* Quantidade exata de possíveis buracos na escala (vagas sem preenchimento).
-* Estatísticas gerais da distribuição.
-
----
-
-# Explicabilidade
-
-Cada atribuição gerada deverá possuir justificativas baseadas em metadados simples de validação (flags indicativas), sem necessidade de expor pesos complexos ou fórmulas matemáticas na interface final.
-
-Exemplo:
-
-"Usuário selecionado porque:
-* Era elegível.
-* Não possuía indisponibilidade.
-* Cumpriu o interstício de descanso.
-* Possuía saldo histórico positivo (+15).
-* Atendia a uma preferência cadastrada."
+O saldo é calculado **apenas sobre a versão publicada**. Trocas posteriores não alteram o saldo.
 
 ---
 
 # Versionamento de Escalas
 
-Nenhuma escala publicada poderá ser sobrescrita.
+Estados: **Rascunho · Simulada · Gerada · Publicada · Arquivada**. Escala publicada não é sobrescrita;
+alterações geram nova versão. Todas as versões são preservadas.
 
-Estados possíveis:
+## Fluxo de Geração
 
-* Rascunho
-* Simulada
-* Gerada
-* Publicada
-* Arquivada
+1. Gestor configura o mês e a cobertura. 2. Gestor cadastra indisponibilidades. 3. Peritos informam
+preferências. 4. (Opcional) Simulação. 5. Geração (assíncrona, via solver). 6. Ajustes manuais /
+preenchimento de buracos. 7. Publicação (finaliza o calendário, calcula saldo e dispara e-mails).
 
-Toda alteração após publicação deverá gerar uma nova versão.
+## Edição pós-publicação
 
-Todas as versões são preservadas para consulta.
+A escala publicada pode ser alterada pelo gestor (reatribuir/esvaziar vaga), porém **com justificativa
+obrigatória**, registrada na auditoria.
+
+## Simulação
+
+Estimativa rápida (sem solver): total de vagas, peritos elegíveis, % estimado de preferências atendidas,
+datas evitadas estimadas e buracos previstos.
 
 ---
 
 # Sistema de Trocas
 
-Após a publicação da escala.
+Após a publicação. **Regra central: troca 1:1, sempre do MESMO grupo** (Plantão↔Plantão, Reserva↔Reserva,
+Pátio↔Pátio) — para evitar "venda" e manter carga/cota neutras. **Toda troca exige aprovação do gestor.**
 
-## Troca Aberta
-
-O usuário disponibiliza uma escala para troca. Fica visível para todos os usuários elegíveis para aquele tipo de escala.
-
-## Troca Direta
-
-Um usuário pode solicitar troca diretamente para outro usuário.
-
-## Validação
-
-Toda troca deve passar por validação automática. O sistema deve impedir trocas que violem regras operacionais rígidas (incluindo o interstício pós-plantão 12h).
-
-## Auditoria de Trocas
-
-Toda troca deverá registrar: solicitante, destinatário, datas envolvidas, data e hora, resultado.
+- **Antecedência mínima** (em dias) configurável pelo gestor: os turnos envolvidos devem estar a pelo
+  menos N dias no futuro. Verificada ao solicitar, ao aceitar e ao aprovar.
+- **Mural (troca aberta):** o perito coloca um turno à disposição; colegas veem e **propõem** um turno do
+  mesmo grupo em troca.
+- **Troca direta:** o perito escolhe um colega e um turno dele para propor a troca 1:1.
+- **Validação rígida** em cada etapa (elegibilidade, indisponibilidade, interstício, sem duplo turno no dia,
+  mesmo grupo, antecedência).
+- **Aprovação do gestor** executa a troca (swap das atribuições) em transação atômica.
+- **Estados:** no mural → aguardando colega → aguardando gestor → aprovada / recusada / cancelada / expirada.
+- **Escala geral pública:** qualquer perito vê o calendário do mês publicado com todos os colegas — base
+  para identificar turnos e iniciar trocas.
+- **Auditoria:** cada transição registra autor, valores antes/depois e descrição.
 
 ---
 
 # Notificações por E-mail
 
-O sistema enviará e-mails automáticos nos seguintes eventos:
-
-* Publicação de nova escala (para todos os usuários escalados no mês).
-* Solicitação de troca recebida (para o destinatário).
-* Troca aceita ou recusada (para o solicitante).
-* Escala com buraco preenchida manualmente pelo gestor (para o usuário afetado).
-
-O e-mail de cada usuário é cadastrado pelo gestor no momento da criação do perfil do usuário. Não há auto-cadastro de usuários.
+Eventos: publicação de escala (escalados do mês), troca solicitada (destinatário), troca aceita/recusada/
+aprovada (envolvidos), buraco preenchido manualmente (afetado). E-mail cadastrado pelo gestor.
 
 ---
 
-# Gestores (Administradores)
+# Auditoria
 
-O gestor é o papel administrativo do sistema. Podem existir múltiplos gestores.
+## Operacional
+Registra **todas as ações** de gestor e perito, com data/hora, responsável e valores anterior/novo:
+usuários, perfis, elegibilidades, cotas individuais, indisponibilidades, calendário, geração, publicação,
+edição manual, configuração de saldo/pesos e todas as transições de troca. Consultável em tela própria.
 
-Gestores têm acesso total a todas as funcionalidades de configuração, geração, publicação e auditoria.
+## Matemática (por geração do solver)
+Nº de elegíveis, vagas, preferências cadastradas/atendidas, datas evitadas atribuídas, buracos, tempo de
+processamento, função objetivo, seed e parâmetros.
 
-O primeiro gestor é criado via script de seed ou variável de ambiente na inicialização do sistema.
-
-Gestores adicionais são criados por gestores existentes.
-
----
-
-# Auditoria Operacional
-
-Registrar:
-
-* Criação e alteração de perfis
-* Cadastro de férias e abonos
-* Geração de escala
-* Publicação
-* Alterações manuais (com motivo)
-* Trocas
-
-Cada registro deve conter: data e hora, usuário responsável, valor anterior, valor novo.
+## Diagnóstico
+Endpoint que verifica saúde do sistema (banco, Redis, worker Celery, dados base/seed), retornando o que
+está OK e o que falhou.
 
 ---
 
-# Auditoria Matemática
+# Explicabilidade
 
-Registrar informações da execução do solver:
-
-* Número de usuários elegíveis
-* Número de vagas
-* Preferências cadastradas e atendidas
-* Datas evitadas atribuídas
-* Quantidade de turnos descobertos (buracos)
-* Tempo de processamento
-* Função objetivo final
-* Seed utilizado
+Cada atribuição guarda flags simples ("elegível", "descansado", "data desejada", "saldo positivo", etc.)
+para justificar a escolha sem expor fórmulas/pesos na interface.
 
 ---
 
-# Área do Usuário
+# Área do Usuário (perito)
 
-Visualização em calendário semelhante ao Google Agenda.
-
-Funcionalidades:
-
-* Consultar escalas futuras.
-* Consultar histórico.
-* Informar preferências.
-* Disponibilizar escalas para troca.
-* Solicitar trocas.
-* Consultar histórico de trocas.
-* Consultar saldo histórico.
-
-## Indicador de Equilíbrio
-
-Exibir:
-
-* Saldo atual.
-* Posição relativa na equipe (ex.: "72º de 103").
-* Evolução histórica com representação gráfica.
-
----
+- **Minha Agenda:** calendário do mês; registra preferências por modalidade; após publicado vira leitura
+  (dias escalados em dourado).
+- **Escala Geral:** calendário público do mês publicado com todos os peritos.
+- **Trocas:** colocar à disposição / troca direta / propor / aceitar / recusar / cancelar; acompanhar status.
+- **Meu Saldo:** saldo atual (arredondado) com explicação clara do significado e histórico **por eventos**
+  (o que aconteceu no mês), sem expor a matemática de normalização.
 
 # Área do Gestor
 
-Funcionalidades:
-
-* Cadastro de usuários (incluindo e-mail para notificações).
-* Cadastro de perfis e elegibilidades.
-* Configuração mensal e modelo de cobertura.
-* Alteração individual de datas com motivo registrado.
-* Simulação antes da geração.
-* Geração de escala.
-* Preenchimento manual de turnos descobertos.
-* Ajustes manuais gerais.
-* Publicação.
-* Relatórios.
-* Auditoria completa.
-* Cadastro de outros gestores.
-* Configuração dos valores do saldo de compensação.
+- **Usuários:** cadastro; por usuário: perfil, elegibilidades, cota individual e indisponibilidades.
+- **Perfis & Regras:** cotas por grupo de cada perfil; criar perfis; fator de preferências; antecedência de troca.
+- **Tipos de Escala**, **Calendários** (cobertura por dia), **Escalas** (gerar/editar/publicar/apagar não publicadas),
+  **Aprovar Trocas**, **Escala Geral**.
+- **Saldo / Ranking:** ranking + edição dos **pontos de saldo** e dos **pesos da distribuição** (com dicas).
+- **Auditoria** e **Diagnóstico**.
+- Configurações têm **dicas (ⓘ)** explicativas ao passar o mouse.
 
 ---
 
 # Algoritmo de Distribuição
 
-Utilizar Google OR-Tools CP-SAT com `random_seed` fixo.
-
-Objetivo principal: maximizar justiça histórica.
-
-Objetivos secundários:
-
-1. Respeitar todas as restrições rígidas.
-2. Atender o maior número possível de preferências.
-3. Minimizar atribuições em datas evitadas.
-4. Equilibrar cargas de trabalho.
-5. Priorizar usuários historicamente prejudicados.
-6. Gerar buracos na escala de forma controlada em caso de inviabilidade.
-7. Produzir solução reproduzível e auditável.
-
-Não utilizar sorteio aleatório como mecanismo principal.
+Google OR-Tools **CP-SAT**, `random_seed` fixo (reprodutível). Variáveis: `x[perito, dia, tipo]` (1 = escalado)
+e `gap[dia, tipo]` (vaga vazia). Restrições rígidas e função objetivo conforme as seções acima (pesos
+configuráveis). Não usa sorteio.
 
 ---
 
 # Evolução Futura Planejada
 
-Implementar módulo específico para datas especiais (Natal, Ano Novo, Carnaval) com regras próprias de rodízio e distribuição independentes do mecanismo padrão de compensação.
+- Módulo de **datas especiais** (Natal, Ano Novo, Carnaval) com rodízio próprio.
+- **Integração NEO (SSO)** — ponto de entrada já preparado e desativado por padrão.
+- **Expiração automática** de ofertas de troca ao entrar na janela de antecedência.
