@@ -86,12 +86,13 @@ def leaderboard(db: Session = Depends(get_db)):
         & (HistoricalBalance.year * 100 + HistoricalBalance.month == latest.c.ym),
     ).subquery()
 
-    # LEFT JOIN: todos os peritos ativos (não-gestores) aparecem, mesmo sem saldo (0.0)
+    # Participam do ranking todos os ativos que estão na rotação (têm perfil atribuído),
+    # independentemente de serem gestores — o papel não define escalação, o perfil sim.
     results = db.query(User.id, User.name, bal.c.balance).outerjoin(
         bal, User.id == bal.c.user_id
     ).filter(
         User.is_active == True,
-        User.is_manager == False,
+        User.profile_id.isnot(None),
     ).order_by(func.coalesce(bal.c.balance, 0.0).desc(), User.name).all()
 
     return [
