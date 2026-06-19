@@ -12,6 +12,7 @@ import { Card, CardHeader, CardBody } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Badge } from '../../components/ui/Badge'
+import { InfoTip } from '../../components/ui/InfoTip'
 
 function limitOf(p: Profile, group: string): number {
   return p.group_limits.find((g) => g.group_name === group)?.max_quantity ?? 0
@@ -91,7 +92,10 @@ export function PerfisPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Perfis &amp; Regras de cota</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+            Perfis &amp; Regras de cota
+            <InfoTip text="Cada perfil define o máximo de turnos por grupo (Plantão/Reserva/Pátio) que um perito recebe no mês. Reserva 12h conta como 2. Alterar a cota de um perito específico cria um perfil Personalizado para ele." />
+          </h1>
           <p className="text-sm text-gray-500 mt-1">Limite máximo de cada grupo por perito, por mês.</p>
         </div>
         <Button onClick={() => setCreating(!creating)}>{creating ? 'Cancelar' : '+ Novo perfil'}</Button>
@@ -117,7 +121,10 @@ export function PerfisPage() {
       <Card>
         <CardBody className="py-3">
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <span className="font-semibold text-gray-700">Limite de dias de preferência:</span>
+            <span className="font-semibold text-gray-700 flex items-center">
+              Limite de dias de preferência
+              <InfoTip text="Quantos dias o perito pode marcar como preferência por grupo: cota do grupo × este fator. Desejo e evitar contam separadamente." />:
+            </span>
             <span className="text-gray-500">cota do grupo ×</span>
             <input
               type="number" min={0}
@@ -129,7 +136,10 @@ export function PerfisPage() {
             <span className="text-xs text-gray-400">Ex.: fator 2 → grupo com cota 2 permite até 4 dias de preferência (desejo e evitar contam separado).</span>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm mt-3 pt-3 border-t border-gray-100">
-            <span className="font-semibold text-gray-700">Antecedência mínima de troca:</span>
+            <span className="font-semibold text-gray-700 flex items-center">
+              Antecedência mínima de troca
+              <InfoTip text="Trocas só podem envolver turnos a pelo menos este número de dias no futuro. Verificado ao solicitar, ao aceitar e ao aprovar." />:
+            </span>
             <input
               type="number" min={0}
               className="w-16 rounded-lg border border-gray-300 px-2 py-1 text-center"

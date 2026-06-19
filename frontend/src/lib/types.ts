@@ -135,12 +135,27 @@ export interface BalanceEntry {
   month: number
   delta: number
   cumulative_balance: number
+  events_count_no_schedule?: number
+  events_count_desired_fulfilled?: number
+  events_count_avoided_assigned?: number
 }
 
 export interface LeaderboardEntry {
   user_id: string
   user_name: string
   cumulative_balance: number
+}
+
+export interface BalanceConfig {
+  month_no_schedule: number
+  desired_date_fulfilled: number
+  common_schedule: number
+  avoided_date_assigned: number
+  weight_gap: number
+  weight_desired: number
+  weight_avoid: number
+  weight_balance: number
+  weight_load_equity: number
 }
 
 export interface AuditEntry {

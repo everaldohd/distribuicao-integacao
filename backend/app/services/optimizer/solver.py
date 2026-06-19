@@ -39,7 +39,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.audit import SolverAudit
 from app.models.eligibility import Eligibility
-from app.models.historical_balance import HistoricalBalance
+from app.models.historical_balance import BalanceConfig, HistoricalBalance
 from app.models.operational_calendar import OperationalCalendar
 from app.models.preference import PreferenceType, UserPreference
 from app.models.profile import Profile, ProfileGroupLimit, UserGroupLimit
@@ -433,13 +433,20 @@ class ScheduleSolver:
                     model.add(fv == 0)
 
         # ------------------------------------------------------------------
-        # Função Objetivo (soft constraints)
+        # Função Objetivo (soft constraints) — pesos configuráveis pelo gestor
         # ------------------------------------------------------------------
+        cfg = self.db.query(BalanceConfig).first()
+        w_gap = cfg.weight_gap if cfg else WEIGHT_GAP
+        w_desired = cfg.weight_desired if cfg else WEIGHT_DESIRED
+        w_avoid = cfg.weight_avoid if cfg else WEIGHT_AVOID
+        w_balance = cfg.weight_balance if cfg else WEIGHT_BALANCE
+        w_equity = cfg.weight_load_equity if cfg else WEIGHT_LOAD_EQUITY
+
         objective_terms = []
 
         # Minimizar gaps (buracos)
         for g in gap.values():
-            objective_terms.append(-WEIGHT_GAP * g)
+            objective_terms.append(-w_gap * g)
 
         # Maximizar preferências atendidas / penalizar datas evitadas
         for u in users:
@@ -449,9 +456,9 @@ class ScheduleSolver:
                         continue
                     v = x[(u.id, day.date, t_id)]
                     if (day.date, t_id) in u.desired_typed or day.date in u.desired_any:
-                        objective_terms.append(WEIGHT_DESIRED * v)
+                        objective_terms.append(w_desired * v)
                     elif (day.date, t_id) in u.avoid_typed or day.date in u.avoid_any:
-                        objective_terms.append(-WEIGHT_AVOID * v)
+                        objective_terms.append(-w_avoid * v)
 
         # Saldo histórico: convenção do sistema (ver config.py / services/balance.py):
         #   saldo POSITIVO = perito prejudicado (foi escalado em datas a evitar, etc.) → deve ser
@@ -467,7 +474,7 @@ class ScheduleSolver:
                 for t_id in type_ids:
                     if (u.id, day.date, t_id) not in x:
                         continue
-                    objective_terms.append(-WEIGHT_BALANCE * scaled * x[(u.id, day.date, t_id)])
+                    objective_terms.append(-w_balance * scaled * x[(u.id, day.date, t_id)])
 
         # Equilíbrio de carga (minimizar desvio entre número de atribuições)
         if users:
@@ -482,7 +489,7 @@ class ScheduleSolver:
                     model.add(dev == ta - avg_var)
                     abs_dev = model.new_int_var(0, len(days) * len(type_ids), "abs_dev")
                     model.add_abs_equality(abs_dev, dev)
-                    objective_terms.append(-WEIGHT_LOAD_EQUITY * abs_dev)
+                    objective_terms.append(-w_equity * abs_dev)
 
         model.maximize(sum(objective_terms))
 

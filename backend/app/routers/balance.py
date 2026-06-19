@@ -31,10 +31,17 @@ class LeaderboardEntry(BaseModel):
 
 
 class BalanceConfigOut(BaseModel):
+    # Pontos de saldo por evento
     month_no_schedule: int
     desired_date_fulfilled: int
     common_schedule: int
     avoided_date_assigned: int
+    # Pesos da distribuição (solver)
+    weight_gap: int
+    weight_desired: int
+    weight_avoid: int
+    weight_balance: int
+    weight_load_equity: int
 
     model_config = {"from_attributes": True}
 
@@ -44,6 +51,11 @@ class BalanceConfigUpdate(BaseModel):
     desired_date_fulfilled: int
     common_schedule: int
     avoided_date_assigned: int
+    weight_gap: int
+    weight_desired: int
+    weight_avoid: int
+    weight_balance: int
+    weight_load_equity: int
 
 
 @router.get("/me", response_model=list[BalanceOut])
@@ -98,6 +110,8 @@ def get_config(db: Session = Depends(get_db)):
             desired_date_fulfilled=settings.BALANCE_DESIRED_DATE_FULFILLED,
             common_schedule=settings.BALANCE_COMMON_SCHEDULE,
             avoided_date_assigned=settings.BALANCE_AVOIDED_DATE_ASSIGNED,
+            weight_gap=100000, weight_desired=300, weight_avoid=200,
+            weight_balance=10, weight_load_equity=50,
         )
     return cfg
 
