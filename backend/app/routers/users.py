@@ -54,8 +54,11 @@ def create_user(
     db: Session = Depends(get_db),
     manager: User = Depends(get_current_manager),
 ):
+    # Unicidade validada na aplicação (evita IntegrityError → 500)
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="E-mail já cadastrado")
+    if data.matricula and db.query(User).filter(User.matricula == data.matricula).first():
+        raise HTTPException(status_code=400, detail="Matrícula já cadastrada")
 
     initial_balance = compute_new_user_initial_balance(db)
 
@@ -109,6 +112,13 @@ def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     changes = data.model_dump(exclude_none=True)
+
+    # Unicidade contra OUTROS usuários (evita IntegrityError → 500)
+    if "email" in changes and db.query(User).filter(User.email == changes["email"], User.id != user_id).first():
+        raise HTTPException(status_code=400, detail="E-mail já cadastrado")
+    if changes.get("matricula") and db.query(User).filter(User.matricula == changes["matricula"], User.id != user_id).first():
+        raise HTTPException(status_code=400, detail="Matrícula já cadastrada")
+
     previous = {k: getattr(user, k) for k in changes}
     for field, value in changes.items():
         setattr(user, field, value)

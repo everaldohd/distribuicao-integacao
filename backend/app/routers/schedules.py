@@ -37,11 +37,18 @@ def get_published(year: int, month: int, db: Session = Depends(get_db)):
     return s
 
 
-@router.get("/{schedule_id}", response_model=ScheduleOut, dependencies=[Depends(get_current_user)])
-def get_schedule(schedule_id: str, db: Session = Depends(get_db)):
+@router.get("/{schedule_id}", response_model=ScheduleOut)
+def get_schedule(
+    schedule_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     s = db.get(Schedule, schedule_id)
     if not s:
         raise HTTPException(status_code=404, detail="Escala não encontrada")
+    # Perito comum só enxerga escala publicada; rascunho/gerada é restrito ao gestor
+    if s.status != ScheduleStatus.PUBLISHED and not current_user.is_manager:
+        raise HTTPException(status_code=403, detail="Escala ainda não publicada")
     return s
 
 

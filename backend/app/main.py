@@ -3,9 +3,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.logging import get_logger, setup_logging
+from app.core.ratelimit import limiter
 from app.routers import (
     audit,
     auth,
@@ -40,6 +43,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Rate limit (anti força-bruta) — usado em /auth/login
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -47,6 +54,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Cabeçalhos básicos de segurança em toda resposta (defesa em profundidade)."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"     # impede MIME sniffing
+    response.headers["X-Frame-Options"] = "DENY"               # impede clickjacking (iframe)
+    response.headers["Referrer-Policy"] = "no-referrer"        # não vaza URL em links externos
+    response.headers["X-XSS-Protection"] = "0"                 # desativa filtro legado (CSP é o caminho moderno)
+    return response
 
 
 @app.middleware("http")

@@ -5,8 +5,12 @@ from sqlalchemy.orm import sessionmaker
 
 from app.main import app
 from app.core.database import Base, get_db
+from app.core.ratelimit import limiter
 from app.core.security import hash_password
 from app.models.user import User
+
+# Desativa o rate limit nos testes (vários logins do mesmo IP fariam 429)
+limiter.enabled = False
 
 SQLALCHEMY_TEST_URL = "sqlite:///./test.db"
 

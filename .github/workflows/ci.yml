@@ -31,6 +31,12 @@ jobs:
       - name: Pytest
         run: python -m pytest -q
 
+      - name: Scan de dependências (pip-audit)
+        continue-on-error: true  # informativo (não bloqueia o build do protótipo)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
   frontend:
     name: Frontend (lint + testes + build)
     runs-on: ubuntu-latest
@@ -58,3 +64,7 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Scan de dependências (npm audit)
+        continue-on-error: true  # informativo (não bloqueia o build do protótipo)
+        run: npm audit --audit-level=high

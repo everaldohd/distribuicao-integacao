@@ -305,8 +305,11 @@ def approve(exchange_id: str, manager: User = Depends(get_current_manager), db: 
                    description=f"Recusada na aprovação (regras): {result.errors_str()}")
         raise HTTPException(status_code=422, detail=f"Troca viola regras: {result.errors_str()}")
 
-    req_a = db.get(Assignment, ex.requester_assignment_id)
-    tgt_a = db.get(Assignment, ex.target_assignment_id)
+    # Lock das duas vagas até o commit, evitando corrida com outra troca/edição simultânea
+    req_a = db.query(Assignment).filter(Assignment.id == ex.requester_assignment_id).with_for_update().first()
+    tgt_a = db.query(Assignment).filter(Assignment.id == ex.target_assignment_id).with_for_update().first()
+    if not req_a or not tgt_a:
+        raise HTTPException(status_code=404, detail="Atribuição da troca não encontrada")
     antes = {"req_user": req_a.user_id, "tgt_user": tgt_a.user_id,
              "req_date": str(req_a.date), "tgt_date": str(tgt_a.date)}
     # Swap dos responsáveis pelas vagas
