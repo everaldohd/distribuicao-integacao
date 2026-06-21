@@ -9,7 +9,10 @@
 | Área | Medida | Onde |
 |---|---|---|
 | Senhas | Hash **bcrypt** (nunca em texto puro) | `core/security.py` |
-| Senhas | Mínimo de **8 caracteres** (criação e troca) | `schemas/user.py` (`MIN_PASSWORD_LENGTH`) |
+| Senhas | Mín. **8 caracteres** + **complexidade** (minúsc./maiúsc./dígito/símbolo) e máx. **72 bytes** (limite do bcrypt, checado em bytes) | `schemas/user.py` (`validate_password_strength`) |
+| Sessão | JWT em **cookie HttpOnly** (inacessível a JS → mitiga roubo por XSS); header Bearer ainda aceito p/ clientes de API | `core/security.py` (`set_auth_cookies`), `routers/deps.py`, `routers/auth.py` |
+| Sessão | **CSRF double-submit**: cookie `csrf_token` legível refletido no header `X-CSRF-Token`, conferido nos métodos que alteram estado | `main.py` (`csrf_protect`), `frontend/src/lib/api.ts` |
+| Sessão | `POST /auth/logout` limpa os cookies de sessão | `routers/auth.py` |
 | Login | **Rate limit** 10/min por IP (anti força-bruta) | `core/ratelimit.py`, `routers/auth.py`, `main.py` |
 | Login | Mensagem genérica (não revela se o usuário existe) + log de falha | `routers/auth.py` |
 | Autenticação | **JWT** (HS256), expira em 8h | `core/security.py`, `routers/deps.py` |
@@ -27,19 +30,24 @@
 
 ## Pendências para PRODUÇÃO (antes de expor publicamente)
 
-1. **SECRET_KEY forte e fixa** — hoje o `.env` usa um placeholder. Gerar com
-   `python -c "import secrets; print(secrets.token_hex(32))"` e injetar por variável de ambiente/secret
-   manager. Sem isso, é possível **forjar tokens JWT**. *(adiado a pedido — fazer antes de produção)*
-2. **Trocar credenciais padrão** — banco `escalas/escalas` (docker-compose) e o gestor seed `admin/admin`.
-3. **HTTPS obrigatório** — terminar TLS no proxy/ingress; não trafegar JWT em HTTP.
-4. **Token no front** — hoje em `localStorage` (exposto a XSS) e sem revogação. Avaliar cookie `HttpOnly`
-   + CSRF, e/ou refresh tokens com expiração curta.
+1. ~~**SECRET_KEY forte e fixa**~~ — **FEITO**: chave forte gerada no `.env` (dev) e o app agora avisa
+   de forma barulhenta se subir sem chave configurada (em vez de gerar uma efêmera silenciosa que
+   derruba sessões a cada restart / diverge entre réplicas — ver `_ensure_secret_key` em `config.py`).
+   Em produção, **gere uma nova** e injete por secret manager.
+2. **Trocar credenciais padrão** — o `docker-compose.yml` agora lê `POSTGRES_USER/PASSWORD/DB` do
+   ambiente (default só p/ dev). Em produção, defina valores fortes e troque o gestor seed `admin/admin`
+   (`FIRST_MANAGER_EMAIL/PASSWORD`).
+3. **HTTPS obrigatório** — terminar TLS no proxy/ingress; não trafegar JWT em HTTP. Ao subir atrás de
+   HTTPS, defina **`COOKIE_SECURE=true`** (cookies só viajam em conexão segura).
 5. **Rate limit distribuído** — o limiter atual é em memória (ok p/ 1 instância). Com várias réplicas,
    configurar backend Redis no slowapi.
 6. **SSO NEO** — ao habilitar, usar segredo forte; o token já exige `exp`. Auto-provisionamento liga-se
    por `NEO_SSO_AUTO_PROVISION`.
-7. **Política de senha** — considerar exigir complexidade (maiúsc./número/símbolo) além do tamanho.
-8. **bcrypt** trunca senha > 72 bytes silenciosamente (limite da lib) — comunicar/limitar no formulário.
+
+> **Resolvido nesta rodada:** política de senha (complexidade + limite real de 72 bytes), token movido
+> de `localStorage` para **cookie HttpOnly** com proteção **CSRF** (double-submit) e endpoint de logout,
+> e credenciais de banco parametrizadas por ambiente. Falta, para produção: `COOKIE_SECURE=true` sob
+> HTTPS, SECRET_KEY forte (adiado), e rate limit distribuído.
 
 ## Notas
 

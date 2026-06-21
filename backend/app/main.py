@@ -1,8 +1,10 @@
+import secrets
 import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -54,6 +56,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Métodos que não alteram estado → não exigem CSRF.
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+# Endpoints que estabelecem a sessão (ainda não há cookie CSRF a conferir).
+_CSRF_EXEMPT_PATHS = {"/api/v1/auth/login", "/api/v1/auth/sso"}
+
+
+@app.middleware("http")
+async def csrf_protect(request: Request, call_next):
+    """Proteção CSRF (double-submit) para requisições autenticadas por cookie.
+
+    Só vale quando a autenticação vem do cookie de sessão. Clientes que usam o
+    header Authorization (Bearer) não são vulneráveis a CSRF e são dispensados.
+    """
+    if request.method not in _SAFE_METHODS and request.url.path not in _CSRF_EXEMPT_PATHS:
+        has_cookie_session = settings.AUTH_COOKIE_NAME in request.cookies
+        uses_bearer = bool(request.headers.get("Authorization"))
+        if has_cookie_session and not uses_bearer:
+            cookie_csrf = request.cookies.get(settings.CSRF_COOKIE_NAME)
+            header_csrf = request.headers.get(settings.CSRF_HEADER_NAME)
+            if not cookie_csrf or not header_csrf or not secrets.compare_digest(cookie_csrf, header_csrf):
+                return JSONResponse(status_code=403, content={"detail": "CSRF token ausente ou inválido"})
+    return await call_next(request)
 
 
 @app.middleware("http")

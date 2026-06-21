@@ -2,16 +2,18 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    # Credenciais via ambiente. Em DEV caem no default; em PRODUÇÃO defina
+    # POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB (ex.: no .env ou secret manager).
     environment:
-      POSTGRES_USER: escalas
-      POSTGRES_PASSWORD: escalas
-      POSTGRES_DB: escalas
+      POSTGRES_USER: ${POSTGRES_USER:-escalas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-escalas}
+      POSTGRES_DB: ${POSTGRES_DB:-escalas}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U escalas"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-escalas}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -38,7 +40,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://escalas:escalas@db:5432/escalas
+      DATABASE_URL: postgresql://${POSTGRES_USER:-escalas}:${POSTGRES_PASSWORD:-escalas}@db:5432/${POSTGRES_DB:-escalas}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
@@ -64,14 +66,16 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://escalas:escalas@db:5432/escalas
+      DATABASE_URL: postgresql://${POSTGRES_USER:-escalas}:${POSTGRES_PASSWORD:-escalas}@db:5432/${POSTGRES_DB:-escalas}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
     env_file:
       - ./backend/.env
     volumes:
       - ./backend:/app
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+    # --beat embute o agendador (tarefas periódicas) no mesmo processo do worker.
+    # OK para 1 worker; com múltiplos workers, rode um serviço `celery beat` único.
+    command: celery -A app.workers.celery_app worker --beat --loglevel=info --concurrency=2
 
   frontend:
     build:

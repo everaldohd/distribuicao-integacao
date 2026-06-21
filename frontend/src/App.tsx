@@ -16,10 +16,10 @@ import { TrocasPage } from './pages/usuario/TrocasPage'
 import { EscalaPublicaPage } from './pages/EscalaPublicaPage'
 import { AprovarTrocasPage } from './pages/gestor/AprovarTrocasPage'
 import { SaldoPage } from './pages/usuario/SaldoPage'
-import { getToken } from './lib/auth'
+import { isAuthenticated } from './lib/auth'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  return getToken() ? <>{children}</> : <Navigate to="/login" replace />
+  return isAuthenticated() ? <>{children}</> : <Navigate to="/login" replace />
 }
 
 export default function App() {

@@ -1,7 +1,7 @@
 import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -10,7 +10,13 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.logging import get_logger
 from app.core.ratelimit import limiter
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    clear_auth_cookies,
+    create_access_token,
+    hash_password,
+    set_auth_cookies,
+    verify_password,
+)
 from app.models.user import User
 from app.schemas.user import LoginRequest, Token
 
@@ -20,7 +26,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=Token)
 @limiter.limit("10/minute")  # anti força-bruta: máx. 10 tentativas/min por IP
-def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
+def login(request: Request, response: Response, data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email, User.is_active == True).first()
     if not user or not verify_password(data.password, user.hashed_password):
         # Log de falha de login (segurança) — não revela se o usuário existe
@@ -28,7 +34,17 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
     logger.info("Login bem-sucedido: %s (gestor=%s)", user.email, user.is_manager)
     token = create_access_token(subject=user.id)
-    return Token(access_token=token)
+    csrf_token = set_auth_cookies(response, token)
+    # access_token também no corpo p/ compatibilidade (clientes de API/Bearer);
+    # o front passa a usar o cookie HttpOnly + o csrf_token.
+    return Token(access_token=token, csrf_token=csrf_token)
+
+
+@router.post("/logout")
+def logout(response: Response):
+    """Encerra a sessão limpando os cookies (HttpOnly não pode ser apagado pelo JS)."""
+    clear_auth_cookies(response)
+    return {"message": "Sessão encerrada"}
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +64,7 @@ class SSORequest(BaseModel):
 
 
 @router.post("/sso", response_model=Token)
-def sso_login(data: SSORequest, db: Session = Depends(get_db)):
+def sso_login(data: SSORequest, response: Response, db: Session = Depends(get_db)):
     if not settings.NEO_SSO_SECRET:
         raise HTTPException(status_code=403, detail="Integração NEO (SSO) não está habilitada.")
 
@@ -109,4 +125,6 @@ def sso_login(data: SSORequest, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuário inativo.")
 
-    return Token(access_token=create_access_token(subject=user.id))
+    token = create_access_token(subject=user.id)
+    csrf_token = set_auth_cookies(response, token)
+    return Token(access_token=token, csrf_token=csrf_token)
