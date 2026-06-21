@@ -100,6 +100,31 @@ def _serialize(db: Session, ex: Exchange) -> ExchangeOut:
     )
 
 
+_PENDING_STATUSES = (
+    ExchangeStatus.OPEN.value,
+    ExchangeStatus.AWAITING_TARGET.value,
+    ExchangeStatus.AWAITING_MANAGER.value,
+)
+
+
+def _invalidate_pending_for_assignments(db: Session, assignment_ids: list[str], exclude_id: str) -> None:
+    """Marca como REJECTED as trocas ainda pendentes que envolvam qualquer uma
+    das vagas informadas (exceto a própria que está sendo aprovada). Usado após
+    um swap, quando essas trocas passam a apontar para um dono desatualizado.
+    Não faz commit — o chamador comita junto da aprovação."""
+    stale = db.query(Exchange).filter(
+        Exchange.id != exclude_id,
+        Exchange.status.in_(_PENDING_STATUSES),
+        (Exchange.requester_assignment_id.in_(assignment_ids))
+        | (Exchange.target_assignment_id.in_(assignment_ids)),
+    ).all()
+    for s in stale:
+        s.status = ExchangeStatus.REJECTED.value
+        s.validation_passed = False
+        s.validation_errors = "Troca invalidada: uma das vagas foi trocada por outra aprovação."
+        s.resolved_at = datetime.now(UTC)
+
+
 def _published_assignment_or_400(db: Session, assignment_id: str, owner_id: str) -> Assignment:
     a = db.get(Assignment, assignment_id)
     if not a or a.user_id != owner_id or a.is_gap:
@@ -151,8 +176,10 @@ def pending_approval(db: Session = Depends(get_db)):
 def create_offer(data: OfferCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Coloca um turno à disposição no mural."""
     a = _published_assignment_or_400(db, data.requester_assignment_id, current_user.id)
-    from datetime import date, timedelta
-    if a.date < date.today() + timedelta(days=get_min_lead_days(db)):
+    from datetime import timedelta
+
+    from app.core.timeutil import today_local
+    if a.date < today_local() + timedelta(days=get_min_lead_days(db)):
         raise HTTPException(status_code=400, detail=f"Turno dentro do prazo de antecedência ({get_min_lead_days(db)} dias)")
 
     ex = Exchange(
@@ -310,6 +337,20 @@ def approve(exchange_id: str, manager: User = Depends(get_current_manager), db: 
     tgt_a = db.query(Assignment).filter(Assignment.id == ex.target_assignment_id).with_for_update().first()
     if not req_a or not tgt_a:
         raise HTTPException(status_code=404, detail="Atribuição da troca não encontrada")
+
+    # Troca DESATUALIZADA: as vagas precisam ainda pertencer às mesmas partes
+    # registradas na troca. Se o solicitante/colega já moveu uma delas (ex.: por
+    # outra troca aprovada antes desta), aprovar aqui swaparia o perito errado.
+    if req_a.user_id != ex.requester_id or tgt_a.user_id != ex.target_id:
+        ex.status = ExchangeStatus.REJECTED.value
+        ex.validation_passed = False
+        ex.validation_errors = "Troca desatualizada: o turno mudou de responsável após a solicitação."
+        ex.resolved_at = datetime.now(UTC)
+        db.commit()
+        log_action(db, manager.id, AuditAction.EXCHANGE, "Exchange", ex.id,
+                   description="Recusada na aprovação: troca desatualizada (turno trocou de dono)")
+        raise HTTPException(status_code=409, detail="Troca desatualizada: o turno já mudou de responsável.")
+
     antes = {"req_user": req_a.user_id, "tgt_user": tgt_a.user_id,
              "req_date": str(req_a.date), "tgt_date": str(tgt_a.date)}
     # Swap dos responsáveis pelas vagas
@@ -319,6 +360,11 @@ def approve(exchange_id: str, manager: User = Depends(get_current_manager), db: 
     ex.status = ExchangeStatus.APPROVED.value
     ex.approved_by_id = manager.id
     ex.resolved_at = datetime.now(UTC)
+
+    # Invalida outras trocas pendentes que referenciem qualquer uma das duas vagas:
+    # após o swap elas estão obsoletas (apontam para um dono que mudou).
+    _invalidate_pending_for_assignments(db, [req_a.id, tgt_a.id], exclude_id=ex.id)
+
     db.commit()
     logger.info("Troca %s aprovada por %s", ex.id, manager.email)
     log_action(db, manager.id, AuditAction.EXCHANGE, "Exchange", ex.id,

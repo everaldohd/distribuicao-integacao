@@ -32,19 +32,33 @@ def run_solver_task(self, schedule_id: str, manager_id: str):
 
 @celery_app.task(name="post_publish_tasks")
 def post_publish_tasks(schedule_id: str):
-    """Após publicação: calcula saldo histórico e envia e-mails."""
+    """Após publicação: calcula saldo histórico e envia e-mails.
+
+    Idempotente: o Celery entrega *at-least-once*; se a task rodar de novo (worker
+    reiniciado após o commit do saldo), o cálculo é pulado em vez de estourar a
+    constraint — e as notificações ainda são tentadas.
+    """
     db = SessionLocal()
     try:
-        # 1. Calcular saldo histórico
-        from app.services.balance import compute_and_persist_monthly_balances
-        compute_and_persist_monthly_balances(db, schedule_id)
-
-        # 2. Notificar usuários escalados
         from app.models.schedule import Assignment, Schedule
         from app.models.user import User
         schedule = db.get(Schedule, schedule_id)
         if not schedule:
             return
+
+        # 1. Calcular saldo histórico (só se ainda não foi calculado para o mês)
+        from app.models.historical_balance import HistoricalBalance
+        already = db.query(HistoricalBalance.id).filter(
+            HistoricalBalance.year == schedule.year,
+            HistoricalBalance.month == schedule.month,
+        ).first()
+        if already:
+            logger.info("Saldo de %d/%d já existe — pulando recálculo", schedule.month, schedule.year)
+        else:
+            from app.services.balance import compute_and_persist_monthly_balances
+            compute_and_persist_monthly_balances(db, schedule_id)
+
+        # 2. Notificar usuários escalados
 
         assigned_users = (
             db.query(User)
@@ -63,6 +77,22 @@ def post_publish_tasks(schedule_id: str):
 
     except Exception as exc:
         logger.exception(f"Erro em post_publish_tasks para {schedule_id}: {exc}")
+    finally:
+        db.close()
+
+
+@celery_app.task(name="expire_stale_exchanges")
+def expire_stale_exchanges():
+    """Expira trocas ainda pendentes cujo turno entrou na janela de antecedência
+    (ou já passou). Evita acúmulo de ofertas mortas no mural ao longo do tempo."""
+    db = SessionLocal()
+    try:
+        from app.services.exchange_validator import expire_pending_exchanges
+        expired = expire_pending_exchanges(db)
+        logger.info("expire_stale_exchanges: %d troca(s) expirada(s)", expired)
+        return expired
+    except Exception as exc:
+        logger.exception(f"Erro em expire_stale_exchanges: {exc}")
     finally:
         db.close()
 

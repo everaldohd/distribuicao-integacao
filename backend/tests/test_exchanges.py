@@ -6,6 +6,7 @@ from datetime import date, timedelta
 
 from app.core.security import hash_password
 from app.models.eligibility import Eligibility
+from app.models.exchange import Exchange, ExchangeStatus, ExchangeType
 from app.models.schedule import Assignment, Schedule, ScheduleStatus
 from app.models.schedule_type import ScheduleType
 from app.models.user import User
@@ -107,3 +108,70 @@ def test_troca_dentro_do_prazo_bloqueada(client, db):
                     json={"requester_assignment_id": ass_a.id, "target_assignment_id": ass_b.id})
     assert r.status_code == 422
     assert "antecedência" in r.json()["detail"]
+
+
+def test_aprovacao_troca_desatualizada_rejeitada(client, db, manager_token):
+    """#2: se o turno mudou de dono após a solicitação, a aprovação não pode
+    swapar o perito errado — deve recusar com 409 e não executar a troca."""
+    ass_a, ass_b = _setup(db, same_group=True)
+    a = db.query(User).filter(User.email == "a@teste.com").first()
+    b = db.query(User).filter(User.email == "b@teste.com").first()
+    # requester_id registrado (b) ≠ dono atual de ass_a (a) → troca desatualizada
+    ex = Exchange(id=str(uuid.uuid4()), type=ExchangeType.DIRECT.value,
+                  status=ExchangeStatus.AWAITING_MANAGER.value,
+                  requester_id=b.id, requester_assignment_id=ass_a.id,
+                  target_id=a.id, target_assignment_id=ass_b.id, validation_passed=True)
+    db.add(ex)
+    db.commit()
+    r = client.post(f"/api/v1/exchanges/{ex.id}/approve",
+                    headers={"Authorization": f"Bearer {manager_token}"})
+    assert r.status_code == 409, r.text
+    db.expire_all()
+    # Nenhum swap aconteceu
+    assert db.get(Assignment, ass_a.id).user_id == a.id
+    assert db.get(Assignment, ass_b.id).user_id == b.id
+
+
+def test_expira_ofertas_vencidas(db):
+    """#3: ofertas pendentes cujo turno entrou no prazo de antecedência expiram."""
+    from app.services.exchange_validator import expire_pending_exchanges
+    ass_a, ass_b = _setup(db, same_group=True, lead_days=1)  # dentro do prazo (default 3)
+    a = db.query(User).filter(User.email == "a@teste.com").first()
+    ex = Exchange(id=str(uuid.uuid4()), type=ExchangeType.OPEN.value,
+                  status=ExchangeStatus.OPEN.value,
+                  requester_id=a.id, requester_assignment_id=ass_a.id)
+    db.add(ex)
+    db.commit()
+    n = expire_pending_exchanges(db)
+    assert n == 1
+    db.expire_all()
+    assert db.get(Exchange, ex.id).status == ExchangeStatus.EXPIRED.value
+
+
+def test_interesticio_vira_o_mes_na_troca(db):
+    """#4: o descanso pós-Plantão 12h precisa valer na virada de mês.
+
+    Ao trocar, B assume o Plantão 12h de A no último dia de julho; B já tem um
+    turno no 1º de agosto (outra escala). Antes da correção isso passava, porque
+    a checagem filtrava por schedule_id (mesmo mês)."""
+    from datetime import date
+
+    from app.services.exchange_validator import validate_exchange
+
+    ass_a, ass_b = _setup(db, same_group=True, lead_days=30)
+    b = db.query(User).filter(User.email == "b@teste.com").first()
+    plantao = db.query(ScheduleType).filter(ScheduleType.name == "Plantão 12h").first()
+    plantao.requires_rest_day_after = True  # Plantão 12h exige descanso no dia seguinte
+
+    # Plantão de A no último dia de julho; B com turno no 1º de agosto (escala distinta)
+    sched_ago = Schedule(id=str(uuid.uuid4()), calendar_id="cal", year=2026, month=8,
+                         version=1, status=ScheduleStatus.PUBLISHED, created_by_id="mgr")
+    db.add(sched_ago)
+    db.flush()
+    ass_a.date = date(2026, 7, 31)
+    _assign(db, sched_ago, b, plantao, date(2026, 8, 1))
+    db.commit()
+
+    result = validate_exchange(db, ass_a.id, ass_b.id)
+    assert not result.passed
+    assert "dia seguinte" in result.errors_str()

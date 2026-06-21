@@ -1,9 +1,10 @@
 """Validação de trocas de escala contra regras operacionais rígidas."""
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import today_local
 from app.models.eligibility import Eligibility
 from app.models.historical_balance import BalanceConfig
 from app.models.schedule import Assignment
@@ -23,6 +24,35 @@ class ValidationResult:
 def get_min_lead_days(db: Session) -> int:
     cfg = db.query(BalanceConfig).first()
     return cfg.exchange_min_lead_days if cfg and cfg.exchange_min_lead_days is not None else 3
+
+
+def expire_pending_exchanges(db: Session) -> int:
+    """Marca como EXPIRED as trocas pendentes cujo turno entrou na janela de
+    antecedência (ou já passou). Lógica isolada da task Celery p/ ser testável."""
+    from datetime import UTC, datetime
+
+    from app.core.timeutil import today_local
+    from app.models.exchange import Exchange, ExchangeStatus
+    from app.models.schedule import Assignment
+
+    pending = (ExchangeStatus.OPEN.value, ExchangeStatus.AWAITING_TARGET.value,
+               ExchangeStatus.AWAITING_MANAGER.value)
+    limite = today_local() + timedelta(days=get_min_lead_days(db))
+    expired = 0
+    for ex in db.query(Exchange).filter(Exchange.status.in_(pending)).all():
+        dates = []
+        for aid in (ex.requester_assignment_id, ex.target_assignment_id):
+            if aid:
+                a = db.get(Assignment, aid)
+                if a:
+                    dates.append(a.date)
+        if dates and min(dates) < limite:
+            ex.status = ExchangeStatus.EXPIRED.value
+            ex.resolved_at = datetime.now(UTC)
+            expired += 1
+    if expired:
+        db.commit()
+    return expired
 
 
 def validate_exchange(
@@ -56,7 +86,7 @@ def validate_exchange(
 
     # 0b. Antecedência mínima — os dois turnos precisam estar suficientemente no futuro
     min_lead = get_min_lead_days(db)
-    limite = date.today() + timedelta(days=min_lead)
+    limite = today_local() + timedelta(days=min_lead)
     for d in (req.date, tgt.date):
         if d < limite:
             errors.append(f"Troca exige antecedência mínima de {min_lead} dia(s); {d} está dentro do prazo")
@@ -89,6 +119,8 @@ def validate_exchange(
             errors.append(f"Usuário {user_id} não é elegível para {schedule_type.name if schedule_type else new_type_id}")
 
         # 3. Interstício pós-Plantão 12h
+        # NB: sem filtro por schedule_id — o descanso precisa valer também na
+        # virada do mês (dia seguinte/anterior pode estar em outra escala).
         if schedule_type and schedule_type.requires_rest_day_after:
             # Não pode ter escala no dia seguinte
             next_day = new_date + timedelta(days=1)
@@ -96,7 +128,7 @@ def validate_exchange(
                 Assignment.user_id == user_id,
                 Assignment.date == next_day,
                 Assignment.is_gap == False,
-                Assignment.schedule_id == new_assignment.schedule_id,
+                Assignment.id.notin_([req.id, tgt.id]),
             ).first()
             if next_assignment:
                 errors.append(f"Usuário {user_id} tem escala no dia seguinte ao Plantão 12h ({next_day})")
@@ -107,7 +139,7 @@ def validate_exchange(
             Assignment.user_id == user_id,
             Assignment.date == prev_day,
             Assignment.is_gap == False,
-            Assignment.schedule_id == new_assignment.schedule_id,
+            Assignment.id.notin_([req.id, tgt.id]),
             ScheduleType.requires_rest_day_after == True,
         ).first()
         if prev_rest_assignment:

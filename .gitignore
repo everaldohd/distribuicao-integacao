@@ -25,6 +25,11 @@ backend/alembic/versions/__pycache__/
 *.log
 logs/
 
+# Celery beat — estado do agendador (artefato de runtime)
+celerybeat-schedule
+celerybeat-schedule.*
+celerybeat.pid
+
 # IDE
 .vscode/
 .idea/
