@@ -15,6 +15,7 @@ redis==5.0.4
 ortools==9.10.4067
 emails==0.6
 jinja2==3.1.4
+openpyxl==3.1.5
 httpx==0.27.0
 tzdata==2024.1  # dados de fuso p/ zoneinfo (imagem slim não traz)
 

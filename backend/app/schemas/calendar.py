@@ -53,3 +53,31 @@ class CoverageTemplateSet(BaseModel):
     """Define o modelo de cobertura padrão para uma categoria de dia."""
     category: DayCategory
     coverages: dict[str, int]  # {schedule_type_id: quantity}
+
+
+# --- Importação da planilha macro ------------------------------------------
+
+class XlsxDayCell(BaseModel):
+    """Uma célula por dia já digerida a partir da planilha macro."""
+    day: int
+    weekend: bool
+    plantao: list[str] = []
+    rm: str = ""
+    rt: str = ""
+    pim: str = ""
+    pit: str = ""
+
+
+class XlsxParseResult(BaseModel):
+    sheet_name: str
+    available_sheets: list[str]
+    sections_found: list[str]
+    default_selected: list[str]
+    types: list[str]
+    grid: list[XlsxDayCell]
+
+
+class XlsxImportApply(BaseModel):
+    """Aplica a cobertura derivada da planilha ao calendário, para as seções escolhidas."""
+    selected_sections: list[str]
+    grid: list[XlsxDayCell]

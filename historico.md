@@ -31,7 +31,12 @@ Credenciais dev: `admin/admin` (gestor), `usuario/usuario` (perito). Repo: githu
 
 ## Infra/qualidade implementadas
 - **Alembic** (migrations versionadas; `create_all` aposentado). **CI** GitHub Actions (lint+test+build+scan deps).
-- **Testes**: pytest (23, inclui solver/saldo/trocas) + vitest. **Lint**: ruff + eslint.
+- **Testes**: pytest (42, inclui solver/saldo/trocas + import de planilha) + vitest. **Lint**: ruff + eslint.
+- **Importar cobertura por planilha (.xlsx)**: gestor importa a escala macro do instituto e o sistema
+  deriva as vagas do calendário pelas **seções de interesse** que ele marca (A–F→Plantão 12h somando;
+  RM/RT→Reserva Manhã/Tarde; fim de semana c/ RM=RT→Reserva 12h; PIM/PIT→Pátio). Parser puro e testável
+  (`services/xlsx_import.py`); gabarito conferido à mão em `tests/test_xlsx_import.py`. Frontend com
+  drag-and-drop + `ErrorBoundary`.
 - **Auditoria** completa (toda ação, com antes/depois) + tela. **Diagnóstico** (/diagnostics).
 - **Tooltips (ⓘ)** nas configs. **Meu Saldo** explicado (arredondado, histórico por eventos).
 - **SSO NEO**: preparado e **desabilitado** por padrão.

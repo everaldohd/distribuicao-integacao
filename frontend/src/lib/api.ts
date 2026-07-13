@@ -17,6 +17,15 @@ export const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
+  // Uploads: quando o corpo é FormData, remove o Content-Type padrão
+  // (application/json) para o browser definir multipart/form-data COM o boundary.
+  // Sem isso, o backend recebe o corpo sem os campos e responde 422.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData && config.headers) {
+    const h = config.headers as any
+    if (typeof h.delete === 'function') h.delete('Content-Type')
+    else { delete h['Content-Type']; delete h['content-type'] }
+  }
+
   // Double-submit: reflete o cookie CSRF no header para métodos que alteram estado.
   const method = (config.method || 'get').toLowerCase()
   if (!SAFE_METHODS.includes(method)) {

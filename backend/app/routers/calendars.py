@@ -2,7 +2,7 @@ import calendar
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -11,7 +11,15 @@ from app.models.operational_calendar import CalendarDay, CalendarStatus, DayCate
 from app.models.schedule_type import ScheduleType
 from app.models.user import User
 from app.routers.deps import get_current_manager, get_current_user
-from app.schemas.calendar import CalendarCreate, CalendarOut, CoverageTemplateSet, DayOverrideRequest
+from app.schemas.calendar import (
+    CalendarCreate,
+    CalendarOut,
+    CoverageTemplateSet,
+    DayOverrideRequest,
+    XlsxImportApply,
+    XlsxParseResult,
+)
+from app.services import xlsx_import
 from app.services.audit import log_action
 
 router = APIRouter(prefix="/calendars", tags=["calendars"])
@@ -169,6 +177,78 @@ def apply_default_template(
     log_action(db, manager.id, AuditAction.UPDATE, "OperationalCalendar", cal.id,
                description=f"Template padrão aplicado a {dias_atualizados} dias")
     return {"message": f"Template aplicado a {dias_atualizados} dias. Status: OPEN"}
+
+
+@router.post("/parse-xlsx", response_model=XlsxParseResult, dependencies=[Depends(get_current_manager)])
+async def parse_xlsx(
+    year: int = Form(...),
+    month: int = Form(...),
+    file: UploadFile = File(...),
+    sheet_name: str | None = Form(None),
+):
+    """Lê a planilha macro e devolve a grade digerida + seções encontradas.
+    Não altera nada — apenas alimenta a tela de importação."""
+    if not (file.filename or "").lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status_code=400, detail="Envie um arquivo .xlsx")
+    content = await file.read()
+    try:
+        return xlsx_import.parse_workbook(content, year, month, sheet_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # openpyxl pode falhar em arquivos corrompidos
+        raise HTTPException(status_code=400, detail=f"Não foi possível ler a planilha: {e}")
+
+
+@router.post("/{calendar_id}/import-xlsx", dependencies=[Depends(get_current_manager)])
+def import_xlsx(
+    calendar_id: str,
+    data: XlsxImportApply,
+    db: Session = Depends(get_db),
+    manager: User = Depends(get_current_manager),
+):
+    """Aplica ao calendário a cobertura derivada da planilha, para as seções escolhidas.
+    Sobrescreve a cobertura de todos os dias com os 6 tipos (inclusive zeros)."""
+    cal = _get_calendar_or_404(calendar_id, db)
+    tipos = {t.name: t for t in db.query(ScheduleType).filter(ScheduleType.is_active == True).all()}
+    faltando = [t for t in xlsx_import.ALL_TYPES if t not in tipos]
+    if faltando:
+        raise HTTPException(status_code=400, detail=f"Tipos de escala ausentes no sistema: {', '.join(faltando)}")
+
+    grid = [c.model_dump() for c in data.grid]
+    coverage = xlsx_import.coverage_from_grid(grid, data.selected_sections)
+
+    days_by_num = {d.date.day: d for d in cal.days}
+    dias_atualizados = 0
+    total_vagas = 0
+    for daynum, tipo_qtd in coverage.items():
+        day = days_by_num.get(daynum)
+        if not day:
+            continue
+        existentes = {c.schedule_type_id: c for c in day.coverages}
+        for tname, qtd in tipo_qtd.items():
+            tipo = tipos.get(tname)
+            if not tipo:
+                continue
+            total_vagas += qtd
+            if tipo.id in existentes:
+                existentes[tipo.id].quantity = qtd
+                existentes[tipo.id].is_overridden = False
+            else:
+                day.coverages.append(DayCoverage(
+                    id=str(uuid.uuid4()), day_id=day.id, schedule_type_id=tipo.id, quantity=qtd,
+                ))
+        dias_atualizados += 1
+
+    cal.status = CalendarStatus.OPEN
+    db.commit()
+    log_action(db, manager.id, AuditAction.UPDATE, "OperationalCalendar", cal.id,
+               description=f"Cobertura importada da planilha ({len(data.selected_sections)} seções) → {dias_atualizados} dias")
+    return {
+        "message": f"Cobertura importada para {dias_atualizados} dias.",
+        "dias_atualizados": dias_atualizados,
+        "total_vagas": total_vagas,
+        "secoes": data.selected_sections,
+    }
 
 
 @router.patch("/{calendar_id}/days/{day_id}")

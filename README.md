@@ -23,6 +23,7 @@ férias) e maximizando preferências e equilíbrio de carga.
 - [Saldo de compensação (justiça)](#saldo-de-compensação-justiça)
 - [O otimizador (CP-SAT)](#o-otimizador-cp-sat)
 - [Ciclo de vida de uma escala](#ciclo-de-vida-de-uma-escala)
+- [Importar cobertura de planilha (.xlsx)](#importar-cobertura-do-calendário-de-uma-planilha-xlsx)
 - [Integração NEO (SSO) — preparada](#integração-neo-sso--preparada)
 - [Estrutura de pastas](#estrutura-de-pastas)
 - [Referência da API](#referência-da-api)
@@ -214,6 +215,29 @@ Calendário (Rascunho → Aberto)            Escala
 
 ---
 
+## Importar cobertura do calendário de uma planilha (.xlsx)
+
+Em vez de configurar a cobertura dia a dia, o gestor pode **importar a escala macro do
+instituto** — uma planilha `.xlsx` com uma aba por mês (ex.: `Jul-26`) — e o sistema deriva
+as vagas do calendário automaticamente.
+
+Na planilha, cada linha é um turno (equipes **A–F** de plantão, **RM/RT** de reserva,
+**PIM/PIT** de pátio) e cada célula diz **qual seção** cobre aquele turno no dia. Na tela, o
+gestor marca **quais seções lhe interessam** (as do DPI já vêm pré-marcadas) e o sistema conta
+as vagas por dia/tipo:
+
+- equipes A–F → **Plantão 12h** (soma: duas seções marcadas no mesmo dia = 2 vagas);
+- RM → **Reserva Manhã**, RT → **Reserva Tarde**;
+- fim de semana com RM e RT na **mesma** seção → fundem em **Reserva 12h**;
+- PIM → **Pátio Manhã**, PIT → **Pátio Tarde**.
+
+Fluxo: *Calendário → "Importar planilha (xlsx)"* → arrastar/selecionar o arquivo → marcar as
+seções → conferir a **prévia** da cobertura → aplicar. A regra vive em
+`backend/app/services/xlsx_import.py` e é validada em `backend/tests/test_xlsx_import.py`
+(gabarito conferido manualmente para vários meses).
+
+---
+
 ## Integração NEO (SSO) — preparada
 
 Há um ponto de entrada de **login delegado** pronto, porém **desativado por padrão**
@@ -275,6 +299,8 @@ Prefixo: `/api/v1`. Documentação interativa: `/docs`.
 | GET/POST/PUT | `/schedule-types/` | Misto | Tipos de escala |
 | GET/POST | `/calendars/` | Gestor | Calendário do mês |
 | POST | `/calendars/{id}/apply-default-template` | Gestor | Cobertura padrão (dia útil × fim de semana) |
+| POST | `/calendars/parse-xlsx` | Gestor | Lê a planilha macro e devolve seções + prévia |
+| POST | `/calendars/{id}/import-xlsx` | Gestor | Aplica a cobertura da planilha (seções escolhidas) |
 | PATCH | `/calendars/{id}/days/{day_id}` | Gestor | Override de um dia |
 | POST | `/schedules/generate/{calendar_id}` | Gestor | Gera escala (async) |
 | GET | `/schedules/` · `/schedules/{id}` | Logado | Lista / detalhe (com atribuições) |
