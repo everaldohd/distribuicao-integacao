@@ -194,9 +194,9 @@ async def parse_xlsx(
     try:
         return xlsx_import.parse_workbook(content, year, month, sheet_name)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:  # openpyxl pode falhar em arquivos corrompidos
-        raise HTTPException(status_code=400, detail=f"Não foi possível ler a planilha: {e}")
+        raise HTTPException(status_code=400, detail=f"Não foi possível ler a planilha: {e}") from e
 
 
 @router.post("/{calendar_id}/import-xlsx", dependencies=[Depends(get_current_manager)])
