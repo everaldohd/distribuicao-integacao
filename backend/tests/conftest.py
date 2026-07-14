@@ -8,9 +8,16 @@ from app.core.database import Base, get_db
 from app.core.ratelimit import limiter
 from app.core.security import hash_password
 from app.models.user import User
+from app.workers.celery_app import celery_app
 
 # Desativa o rate limit nos testes (vários logins do mesmo IP fariam 429)
 limiter.enabled = False
+
+# Roda as tasks Celery de forma síncrona (eager), sem depender de Redis/broker.
+# _send_email já faz no-op sem SMTP_USER configurado, então isso não dispara
+# chamadas de rede — só evita a conexão com o broker que não existe no CI/testes.
+celery_app.conf.task_always_eager = True
+celery_app.conf.task_eager_propagates = True
 
 SQLALCHEMY_TEST_URL = "sqlite:///./test.db"
 
