@@ -40,7 +40,9 @@ Há dois perfis de acesso:
 - **Perito (usuário)** — registra preferências de datas por modalidade, vê sua escala
   publicada e acompanha seu saldo.
 
-Credenciais de desenvolvimento (seed): `admin` / `admin` (gestor) e `usuario` / `usuario` (perito).
+Credenciais de desenvolvimento (seed): o **gestor** é criado a partir de
+`FIRST_MANAGER_EMAIL`/`FIRST_MANAGER_PASSWORD` do `.env` (padrão `admin@escalas.local` / `change-me`);
+o **perito de teste** é `usuario` / `usuario`.
 
 ---
 

@@ -5,6 +5,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.core import schedule_types as sched
 from app.core.database import get_db
 from app.models.audit import AuditAction
 from app.models.operational_calendar import CalendarDay, CalendarStatus, DayCategory, DayCoverage, OperationalCalendar
@@ -34,20 +35,20 @@ def _get_calendar_or_404(calendar_id: str, db: Session) -> OperationalCalendar:
 
 # Cobertura padrão por categoria de dia: {nome_tipo: quantidade}
 COBERTURA_UTIL = {
-    "Plantão 12h":   1,
-    "Reserva Manhã": 1,
-    "Reserva Tarde": 1,
-    "Reserva 12h":   0,
-    "Pátio Manhã":   1,
-    "Pátio Tarde":   1,
+    sched.PLANTAO_12H:   1,
+    sched.RESERVA_MANHA: 1,
+    sched.RESERVA_TARDE: 1,
+    sched.RESERVA_12H:   0,
+    sched.PATIO_MANHA:   1,
+    sched.PATIO_TARDE:   1,
 }
 COBERTURA_FDS = {
-    "Plantão 12h":   1,
-    "Reserva Manhã": 0,
-    "Reserva Tarde": 0,
-    "Reserva 12h":   1,
-    "Pátio Manhã":   0,
-    "Pátio Tarde":   0,
+    sched.PLANTAO_12H:   1,
+    sched.RESERVA_MANHA: 0,
+    sched.RESERVA_TARDE: 0,
+    sched.RESERVA_12H:   1,
+    sched.PATIO_MANHA:   0,
+    sched.PATIO_TARDE:   0,
 }
 
 
@@ -199,6 +200,19 @@ async def parse_xlsx(
         raise HTTPException(status_code=400, detail=f"Não foi possível ler a planilha: {e}") from e
 
 
+@router.post("/preview-xlsx-coverage", dependencies=[Depends(get_current_manager)])
+def preview_xlsx_coverage(data: XlsxImportApply):
+    """Prévia da cobertura (totais por tipo) para uma seleção de seções, sem gravar.
+    Usa a MESMA regra do import (fonte única no backend) — o front não replica a regra."""
+    grid = [c.model_dump() for c in data.grid]
+    coverage = xlsx_import.coverage_from_grid(grid, data.selected_sections)
+    totals = {t: 0 for t in xlsx_import.ALL_TYPES}
+    for tipo_qtd in coverage.values():
+        for tname, qtd in tipo_qtd.items():
+            totals[tname] += qtd
+    return {"totals": totals, "total_vagas": sum(totals.values())}
+
+
 @router.post("/{calendar_id}/import-xlsx", dependencies=[Depends(get_current_manager)])
 def import_xlsx(
     calendar_id: str,
@@ -231,8 +245,11 @@ def import_xlsx(
                 continue
             total_vagas += qtd
             if tipo.id in existentes:
-                existentes[tipo.id].quantity = qtd
-                existentes[tipo.id].is_overridden = False
+                cov = existentes[tipo.id]
+                cov.quantity = qtd
+                cov.is_overridden = False
+                cov.original_quantity = None
+                cov.override_reason = None
             else:
                 day.coverages.append(DayCoverage(
                     id=str(uuid.uuid4()), day_id=day.id, schedule_type_id=tipo.id, quantity=qtd,

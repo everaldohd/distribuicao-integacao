@@ -113,20 +113,8 @@ function errMsg(error: any, fallback: string): string {
   return error?.message ?? fallback
 }
 
-// Espelha a regra do backend (app/services/xlsx_import.coverage_from_grid) só para o preview.
-function previewTotals(grid: XlsxDayCell[], selected: string[]): Record<string, number> {
-  const sel = new Set(selected.map(s => s.toUpperCase()))
-  const t: Record<string, number> = Object.fromEntries(IMPORT_TYPES.map(x => [x, 0]))
-  for (const c of grid) {
-    t['Plantão 12h'] += c.plantao.filter(s => sel.has((s || '').toUpperCase())).length
-    const rm = (c.rm || '').toUpperCase(), rt = (c.rt || '').toUpperCase()
-    if (c.weekend && rm && rm === rt) { if (sel.has(rm)) t['Reserva 12h']++ }
-    else { if (sel.has(rm)) t['Reserva Manhã']++; if (sel.has(rt)) t['Reserva Tarde']++ }
-    if (sel.has((c.pim || '').toUpperCase())) t['Pátio Manhã']++
-    if (sel.has((c.pit || '').toUpperCase())) t['Pátio Tarde']++
-  }
-  return t
-}
+// A prévia da cobertura vem do backend (POST /calendars/preview-xlsx-coverage),
+// que reusa a MESMA função do import — a regra vive só no Python, sem duplicar aqui.
 
 function ImportXlsxModal({ calendarId, year, month, onClose }: { calendarId: string; year: number; month: number; onClose: () => void }) {
   const qc = useQueryClient()
@@ -164,8 +152,19 @@ function ImportXlsxModal({ calendarId, year, month, onClose }: { calendarId: str
   })
 
   const toggle = (s: string) => setSelected(cur => cur.includes(s) ? cur.filter(x => x !== s) : [...cur, s])
-  const totals = parsed ? previewTotals(parsed.grid, selected) : null
-  const totalVagas = totals ? Object.values(totals).reduce((a, b) => a + b, 0) : 0
+
+  // Prévia calculada no backend (fonte única da regra) — recalcula ao (des)marcar seções.
+  const preview = useQuery({
+    queryKey: ['xlsx-preview', calendarId, selected],
+    queryFn: async () => {
+      const r = await api.post('/calendars/preview-xlsx-coverage', { selected_sections: selected, grid: parsed!.grid })
+      return r.data as { totals: Record<string, number>; total_vagas: number }
+    },
+    enabled: !!parsed,
+    placeholderData: (prev) => prev,
+  })
+  const totals = preview.data?.totals ?? null
+  const totalVagas = preview.data?.total_vagas ?? 0
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>

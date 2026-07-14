@@ -7,7 +7,7 @@
 Sistema web de gestão e distribuição de escalas de peritos. Distribuição por **otimização**
 (OR-Tools CP-SAT, seed fixo), não sorteio. Stack: FastAPI/SQLAlchemy/PostgreSQL/Celery/Redis +
 React/TS. Docker Compose. **Protótipo** (não-produção; dados de teste).
-Credenciais dev: `admin/admin` (gestor), `usuario/usuario` (perito). Repo: github.com/everaldohd/distribuicao-integacao.
+Credenciais dev: gestor criado do `.env` (`FIRST_MANAGER_EMAIL`/`FIRST_MANAGER_PASSWORD`, padrão `admin@escalas.local`); perito de teste `usuario/usuario`. Repo: github.com/everaldohd/distribuicao-integacao.
 
 ## Decisões finais de domínio
 - **Perfis = cota por GRUPO** (Plantão/Reserva/Pátio), ponderada (Reserva 12h conta 2).
@@ -51,7 +51,7 @@ Pendente p/ produção: **SECRET_KEY forte** (adiado), credenciais de banco fort
 + `COOKIE_SECURE=true`, rate limit distribuído (Redis).
 
 ## Robustez / falhas ao longo do tempo (corrigidas)
-- **SECRET_KEY**: chave forte no `.env`; sem chave configurada o app avisa (não gera efêmera silenciosa).
+- **SECRET_KEY**: chave forte no `.env`; sem chave configurada, gera uma chave efêmera COM aviso visível (as sessões caem a cada restart) — configure em produção.
 - **Troca desatualizada**: `approve` agora confere se as vagas ainda pertencem às partes (409 se mudou)
   e invalida outras trocas pendentes sobre as mesmas vagas após o swap.
 - **Expiração de ofertas**: tarefa Celery beat diária (`expire_stale_exchanges`, 03:00 SP) marca EXPIRED

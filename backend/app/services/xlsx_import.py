@@ -37,14 +37,16 @@ import unicodedata
 
 import openpyxl
 
-# Nomes dos tipos de escala no sistema (devem casar com schedule_types.name)
-T_PLANTAO = "Plantão 12h"
-T_RES_M = "Reserva Manhã"
-T_RES_T = "Reserva Tarde"
-T_RES_12 = "Reserva 12h"
-T_PAT_M = "Pátio Manhã"
-T_PAT_T = "Pátio Tarde"
-ALL_TYPES = [T_PLANTAO, T_RES_M, T_RES_T, T_RES_12, T_PAT_M, T_PAT_T]
+from app.core import schedule_types as _st
+
+# Nomes dos tipos de escala (fonte única em core.schedule_types)
+T_PLANTAO = _st.PLANTAO_12H
+T_RES_M = _st.RESERVA_MANHA
+T_RES_T = _st.RESERVA_TARDE
+T_RES_12 = _st.RESERVA_12H
+T_PAT_M = _st.PATIO_MANHA
+T_PAT_T = _st.PATIO_TARDE
+ALL_TYPES = _st.ALL_TYPE_NAMES
 
 # Rótulos de bloco na coluna A
 PLANTAO_LABELS = ["A", "B", "C", "D", "E", "F"]

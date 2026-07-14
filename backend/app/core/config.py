@@ -5,9 +5,10 @@ from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
 
-# Sentinela: chave não definida pelo ambiente. Não geramos uma chave aleatória
-# silenciosa como default, porque ela muda a cada processo/réplica e derruba
-# todas as sessões — ver tratamento em _ensure_secret_key().
+# Sentinela: chave não definida pelo ambiente. O default NÃO é uma chave aleatória
+# (ela mudaria a cada processo/réplica e derrubaria as sessões). Em vez disso,
+# _ensure_secret_key() gera uma chave efêmera COM aviso visível quando nada é
+# configurado — aceitável em DEV, proibido em produção.
 _SECRET_NOT_SET = ""
 
 

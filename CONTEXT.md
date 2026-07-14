@@ -17,7 +17,7 @@ Justiça mantida por **saldo de compensação** acumulado por perito.
 · React + TypeScript + Vite + TanStack Query + Tailwind. Tudo via **Docker Compose**
 (`db`, `redis`, `backend`, `worker`, `frontend`). Monorepo: `backend/` + `frontend/`.
 
-**Credenciais dev (seed):** `admin`/`admin` (gestor) · `usuario`/`usuario` (perito).
+**Credenciais dev (seed):** gestor = `FIRST_MANAGER_EMAIL`/`FIRST_MANAGER_PASSWORD` do `.env` (padrão `admin@escalas.local`) · perito de teste `usuario`/`usuario`.
 
 ---
 

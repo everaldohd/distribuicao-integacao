@@ -250,9 +250,9 @@ class ScheduleSolver:
         else:
             prev_year, prev_month = self.year, self.month - 1
 
-        prev_last_day = date(prev_year, prev_month,
-                             [31, 29 if prev_year % 4 == 0 else 28, 31, 30, 31, 30,
-                              31, 31, 30, 31, 30, 31][prev_month - 1])
+        # Último dia do mês anterior = 1º dia do mês atual − 1 dia
+        # (evita tabela fixa e cálculo de bissexto manual, que erra em anos seculares).
+        prev_last_day = date(self.year, self.month, 1) - timedelta(days=1)
 
         # Buscar atribuições publicadas no último dia do mês anterior com tipo rest_day
         rest_type_ids = {t.id for t in self.schedule_types if t.requires_rest_day_after}
@@ -310,16 +310,22 @@ class ScheduleSolver:
             if available < qty:
                 gaps += qty - available
 
+        # Estimativa OTIMISTA por capacidade (não roda o solver, não considera conflitos):
+        # fração das preferências desejadas que caberia nas vagas efetivamente preenchíveis.
+        fillable = max(0, total_slots - gaps)
+        pref_pct = round(min(100.0, 100.0 * fillable / all_desired), 1) if all_desired > 0 else 0.0
+
         return SimulationResult(
             total_slots=total_slots,
             eligible_users=n_eligible,
-            estimated_preferences_fulfilled_pct=min(100.0, 70.0) if all_desired > 0 else 0.0,
+            estimated_preferences_fulfilled_pct=pref_pct,
             estimated_avoided_assigned=max(0, all_avoid // 4),
             expected_gaps=gaps,
             notes=[
                 f"{n_eligible} usuários elegíveis para ao menos um tipo de escala.",
                 f"{total_slots} vagas no total.",
                 f"{gaps} possíveis buracos identificados na pré-análise.",
+                "Percentual de preferências é um limite otimista por capacidade (estimativa, não o resultado do solver).",
             ],
         )
 

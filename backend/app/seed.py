@@ -45,16 +45,9 @@ def seed():
             ))
             print("Usuário de teste criado: usuario / usuario")
 
-        # Tipos de escala iniciais (com grupo de cota e peso)
-        default_types = [
-            {"name": "Plantão 12h",   "requires_rest_day_after": True,  "display_order": 1, "group_name": "Plantão", "group_weight": 1},
-            {"name": "Reserva Manhã", "requires_rest_day_after": False, "display_order": 2, "group_name": "Reserva", "group_weight": 1},
-            {"name": "Reserva Tarde", "requires_rest_day_after": False, "display_order": 3, "group_name": "Reserva", "group_weight": 1},
-            {"name": "Reserva 12h",   "requires_rest_day_after": False, "display_order": 4, "group_name": "Reserva", "group_weight": 2},
-            {"name": "Pátio Manhã",   "requires_rest_day_after": False, "display_order": 5, "group_name": "Pátio",   "group_weight": 1},
-            {"name": "Pátio Tarde",   "requires_rest_day_after": False, "display_order": 6, "group_name": "Pátio",   "group_weight": 1},
-        ]
-        for t in default_types:
+        # Tipos de escala iniciais (definição-fonte centralizada em core.schedule_types)
+        from app.core.schedule_types import DEFAULT_SCHEDULE_TYPES
+        for t in DEFAULT_SCHEDULE_TYPES:
             existing_type = db.query(ScheduleType).filter(ScheduleType.name == t["name"]).first()
             if not existing_type:
                 db.add(ScheduleType(id=str(uuid.uuid4()), **t))
