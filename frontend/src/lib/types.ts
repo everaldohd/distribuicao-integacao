@@ -4,6 +4,7 @@ export interface User {
   email: string
   is_manager: boolean
   profile_id: string | null
+  must_change_password: boolean
 }
 
 export interface ScheduleType {

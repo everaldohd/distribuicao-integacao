@@ -88,6 +88,44 @@ def test_logout_revokes_token(client, manager_user):
     assert client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
 
 
+def test_first_login_requires_password_change(client, manager_token):
+    """Usuário recém-criado vem com must_change_password=True (troca no 1º login)."""
+    me = client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {manager_token}"})
+    assert me.status_code == 200
+    assert me.json()["must_change_password"] is True
+
+
+def test_change_password_clears_flag_and_new_password_works(client, manager_token):
+    headers = {"Authorization": f"Bearer {manager_token}"}
+    resp = client.put(
+        "/api/v1/users/me/password",
+        json={"current_password": "senha123", "new_password": "minha.nova1"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    # Flag limpa após a troca
+    assert client.get("/api/v1/users/me", headers=headers).json()["must_change_password"] is False
+    # A senha nova vale; a antiga não
+    assert client.post("/api/v1/auth/login", json={"email": "gestor@teste.com", "password": "minha.nova1"}).status_code == 200
+    assert client.post("/api/v1/auth/login", json={"email": "gestor@teste.com", "password": "senha123"}).status_code == 401
+
+
+def test_password_policy_8_chars_and_special(client, manager_token):
+    """Política: mínimo 8 caracteres + 1 especial (sem exigir maiúscula/dígito)."""
+    headers = {"Authorization": f"Bearer {manager_token}"}
+
+    def attempt(pwd):
+        return client.put(
+            "/api/v1/users/me/password",
+            json={"current_password": "senha123", "new_password": pwd},
+            headers=headers,
+        ).status_code
+
+    assert attempt("curta!") == 422          # menos de 8
+    assert attempt("semespecial8") == 422    # sem caractere especial
+    assert attempt("senhaboa!") == 200       # 8+ com especial: aceita
+
+
 def test_health(client):
     resp = client.get("/health")
     assert resp.status_code == 200

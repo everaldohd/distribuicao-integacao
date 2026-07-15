@@ -1,0 +1,93 @@
+# Compose de PRODUÇÃO — difere do dev:
+#   - sem volumes de código, sem --reload, sem seed automático de teste
+#   - db/redis NÃO expõem portas ao host (só rede interna)
+#   - segredos OBRIGATÓRIOS via ambiente (${VAR:?...} falha o boot se faltar)
+#   - frontend buildado e servido por nginx (porta 80), que faz proxy do /api
+#
+# Uso:
+#   docker compose -f docker-compose.prod.yml up -d --build
+# Variáveis exigidas (defina em .env na raiz ou no secret manager do host):
+#   POSTGRES_PASSWORD, SECRET_KEY
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-escalas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-escalas}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-escalas}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-escalas}:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-escalas}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY}
+      COOKIE_SECURE: "true"   # exige HTTPS no cookie de sessão (TLS no proxy/host)
+      CORS_ORIGINS: '${CORS_ORIGINS:-[]}'  # mesma origem via nginx → CORS vazio
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      FIRST_MANAGER_EMAIL: ${FIRST_MANAGER_EMAIL:-}
+      FIRST_MANAGER_PASSWORD: ${FIRST_MANAGER_PASSWORD:-}
+      FIRST_MANAGER_NAME: ${FIRST_MANAGER_NAME:-}
+    # Migrations antes do servidor; seed só cria o 1º gestor se não existir
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m app.seed &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-escalas}:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-escalas}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY}
+    command: celery -A app.workers.celery_app worker --beat --loglevel=info --concurrency=2
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  postgres_data_prod:

@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { login, getMe } from '../lib/auth'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
+import { TestBanner } from '../components/ui/TestBanner'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -18,6 +19,10 @@ export function LoginPage() {
     try {
       await login(email, password)
       const user = await getMe()
+      if (user.must_change_password) {
+        navigate('/trocar-senha', { replace: true })
+        return
+      }
       navigate(user.is_manager ? '/gestor/usuarios' : '/usuario/agenda')
     } catch {
       setError('E-mail ou senha incorretos.')
@@ -27,7 +32,9 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
+      <TestBanner />
+      <div className="flex flex-1 items-center justify-center">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-gray-900">Gestão de Escalas</h1>
@@ -58,6 +65,14 @@ export function LoginPage() {
             Entrar
           </Button>
         </form>
+
+        <p className="mt-6 text-center text-sm text-gray-500">
+          Primeira vez aqui?{' '}
+          <Link to="/como-funciona" className="font-medium text-primary-600 hover:text-primary-700 hover:underline">
+            Veja como o sistema funciona
+          </Link>
+        </p>
+      </div>
       </div>
     </div>
   )

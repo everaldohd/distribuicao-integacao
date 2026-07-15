@@ -1,0 +1,16 @@
+# Normaliza fins de linha: tudo que o git detectar como texto é armazenado
+# com LF no repositório (evita churn CRLF/LF entre Windows e Linux/CI).
+* text=auto
+
+# Sempre LF no checkout (scripts quebram com CRLF no container Linux)
+*.sh text eol=lf
+Dockerfile text eol=lf
+
+# Binários — nunca tocar
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.xlsx binary
+*.db binary

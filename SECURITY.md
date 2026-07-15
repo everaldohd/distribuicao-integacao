@@ -2,14 +2,17 @@
 
 > Resumo das medidas de segurança implementadas e do que ainda falta para produção.
 > Mantenha este documento atualizado a cada mudança que afete segurança.
-> Status do projeto: **protótipo** (não está em produção).
+> Status do projeto: **fase de testes com usuários e dados reais** (pré-adoção oficial).
+> Pendências antes de abrir aos usuários: SECRET_KEY forte no ambiente, troca da senha
+> do primeiro gestor, HTTPS + COOKIE_SECURE=true (ver `docker-compose.prod.yml`) e backup do banco.
 
 ## Medidas implementadas
 
 | Área | Medida | Onde |
 |---|---|---|
 | Senhas | Hash **bcrypt** (nunca em texto puro) | `core/security.py` |
-| Senhas | Mín. **8 caracteres** + **complexidade** (minúsc./maiúsc./dígito/símbolo) e máx. **72 bytes** (limite do bcrypt, checado em bytes) | `schemas/user.py` (`validate_password_strength`) |
+| Senhas | Mín. **8 caracteres** + ao menos **1 caractere especial**, máx. **72 bytes** (limite do bcrypt, checado em bytes); política relaxada de propósito — compensada pela troca obrigatória e pelo rate limit | `schemas/user.py` (`validate_password_strength`) |
+| Senhas | **Troca obrigatória no 1º login** (`must_change_password`): novos usuários e todos os existentes (via migration) precisam definir a própria senha antes de usar o sistema | `models/user.py`, `routers/users.py`, `frontend/src/pages/TrocarSenhaPage.tsx` |
 | Sessão | JWT em **cookie HttpOnly** (inacessível a JS → mitiga roubo por XSS); header Bearer ainda aceito p/ clientes de API | `core/security.py` (`set_auth_cookies`), `routers/deps.py`, `routers/auth.py` |
 | Sessão | **CSRF double-submit**: cookie `csrf_token` legível refletido no header `X-CSRF-Token`, conferido nos métodos que alteram estado | `main.py` (`csrf_protect`), `frontend/src/lib/api.ts` |
 | Sessão | `POST /auth/logout` limpa os cookies **e revoga o token** (denylist por `jti` no Redis, TTL = validade restante; fallback em memória p/ dev/testes) | `routers/auth.py`, `core/security.py`, `core/token_denylist.py` |

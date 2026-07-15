@@ -1,0 +1,24 @@
+# Imagem de PRODUÇÃO: sem deps de dev, sem reload, usuário não-root.
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Usuário sem privilégios (defesa em profundidade)
+RUN useradd --create-home --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+# Migrations rodam no entrypoint do compose; aqui só o servidor.
+# Workers: regra prática 2×CPU+1; ajuste via docker-compose.prod.yml se preciso.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

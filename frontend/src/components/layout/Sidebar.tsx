@@ -70,7 +70,13 @@ export function Sidebar({ user }: Props) {
         )}
       </nav>
 
-      <div className="px-3 py-4 border-t border-gray-700">
+      <div className="px-3 py-4 border-t border-gray-700 space-y-1">
+        <NavLink
+          to="/como-funciona"
+          className="block px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+        >
+          Como funciona?
+        </NavLink>
         <button
           onClick={logout}
           className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"

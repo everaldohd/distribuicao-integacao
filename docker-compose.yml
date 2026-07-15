@@ -11,7 +11,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # 127.0.0.1 = só esta máquina acessa o banco; a rede não alcança.
+      # (containers continuam acessando normalmente pela rede interna do Docker)
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-escalas}"]
       interval: 5s
@@ -22,7 +24,8 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      # idem: Redis sem senha nunca deve ficar visível na rede
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

@@ -113,6 +113,8 @@ def sso_login(data: SSORequest, response: Response, db: Session = Depends(get_db
             matricula=matricula or None,
             # Senha aleatória: o acesso é sempre via NEO; não há login local para ele
             hashed_password=hash_password(secrets.token_urlsafe(24)),
+            # Não faz sentido exigir troca de senha de quem nunca digita senha (SSO)
+            must_change_password=False,
             is_manager=False,
         )
         db.add(user)

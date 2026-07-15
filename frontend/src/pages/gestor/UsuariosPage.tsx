@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import { getApiErrorMessage, PASSWORD_REQUIREMENTS } from '../../lib/apiError'
 import type { User, Profile } from '../../lib/types'
 import { Card, CardHeader, CardBody } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
@@ -53,7 +54,12 @@ export function UsuariosPage() {
             >
               <Input label="Nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
               <Input label="E-mail" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-              <Input label="Senha" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+              <div>
+                <Input label="Senha provisória" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+                <p className="mt-1 text-xs text-gray-500">
+                  {PASSWORD_REQUIREMENTS} O usuário será obrigado a trocá-la no primeiro acesso.
+                </p>
+              </div>
               <div className="flex items-end">
                 <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                   <input type="checkbox" checked={form.is_manager} onChange={(e) => setForm({ ...form, is_manager: e.target.checked })} className="rounded" />
@@ -63,7 +69,11 @@ export function UsuariosPage() {
               <div className="col-span-2 flex justify-end gap-2">
                 <Button type="submit" loading={create.isPending}>Criar usuário</Button>
               </div>
-              {create.isError && <p className="col-span-2 text-sm text-red-600">Erro ao criar usuário.</p>}
+              {create.isError && (
+                <p className="col-span-2 text-sm text-red-600" role="alert">
+                  {getApiErrorMessage(create.error, 'Erro ao criar usuário.')}
+                </p>
+              )}
             </form>
           </CardBody>
         </Card>

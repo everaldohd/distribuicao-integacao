@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppLayout } from './components/layout/AppLayout'
 import { LoginPage } from './pages/LoginPage'
 import { SSOPage } from './pages/SSOPage'
+import { ComoFuncionaPage } from './pages/ComoFuncionaPage'
+import { TrocarSenhaPage } from './pages/TrocarSenhaPage'
 import { UsuariosPage } from './pages/gestor/UsuariosPage'
 import { TiposEscalaPage } from './pages/gestor/TiposEscalaPage'
 import { CalendariosPage } from './pages/gestor/CalendariosPage'
@@ -27,6 +29,10 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/sso" element={<SSOPage />} />
+      {/* Pública: explica o sistema para quem chega pela primeira vez */}
+      <Route path="/como-funciona" element={<ComoFuncionaPage />} />
+      {/* Troca de senha obrigatória (1º login) — autenticada, mas fora do layout */}
+      <Route path="/trocar-senha" element={<RequireAuth><TrocarSenhaPage /></RequireAuth>} />
 
       <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
         {/* Gestor */}

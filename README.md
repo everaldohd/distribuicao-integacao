@@ -1,8 +1,11 @@
 # Sistema de Gestão e Distribuição de Escalas
 
-> **Status:** protótipo funcional — **não está em produção**; os dados do banco são de teste e
-> podem ser descartados a qualquer momento. A especificação de negócio está em **[SPEC.md](SPEC.md)**
-> (serve de base para manutenção ou reimplementação em outro stack).
+> **Status:** em **fase de testes** com usuários reais — candidato a ferramenta oficial se aprovado.
+> O banco contém **dados reais de peritos** (usuários e perfis); trate-o com cuidado.
+> Durante os testes, resets controlados podem acontecer via `python -m app.reset_test_data`
+> (mantém somente o cadastro de usuários/perfis; apaga pontuação, preferências,
+> indisponibilidades, calendários e escalas). **Não** apague o volume do banco.
+> A especificação de negócio está em **[SPEC.md](SPEC.md)**.
 > Postura e pendências de segurança: **[SECURITY.md](SECURITY.md)**.
 
 Aplicação web para **planejar, distribuir e auditar escalas de serviço** de peritos.

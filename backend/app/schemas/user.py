@@ -15,8 +15,9 @@ MAX_PASSWORD_BYTES = 72
 def validate_password_strength(password: str) -> str:
     """Valida tamanho (em bytes, p/ bcrypt) e complexidade da senha.
 
-    Exige: mínimo de 8 caracteres, no máximo 72 bytes (limite do bcrypt) e ao
-    menos uma letra minúscula, uma maiúscula, um dígito e um caractere especial.
+    Política (decidida na fase de testes): mínimo de 8 caracteres, ao menos um
+    caractere especial, máximo 72 bytes (limite do bcrypt). Sem exigência de
+    maiúscula/dígito — regras demais geram senhas anotadas em post-it.
     Levanta ValueError (vira 422 no FastAPI) com mensagem clara.
     """
     if len(password) < MIN_PASSWORD_LENGTH:
@@ -26,14 +27,8 @@ def validate_password_strength(password: str) -> str:
             f"A senha é longa demais (máx. {MAX_PASSWORD_BYTES} bytes; "
             "acentos e emoji contam mais de 1 byte cada)."
         )
-    if not any(c.islower() for c in password):
-        raise ValueError("A senha deve conter ao menos uma letra minúscula.")
-    if not any(c.isupper() for c in password):
-        raise ValueError("A senha deve conter ao menos uma letra maiúscula.")
-    if not any(c.isdigit() for c in password):
-        raise ValueError("A senha deve conter ao menos um dígito.")
     if all(c.isalnum() for c in password):
-        raise ValueError("A senha deve conter ao menos um caractere especial (ex.: !@#$%).")
+        raise ValueError("A senha deve conter ao menos um caractere especial (ex.: !#-.,*).")
     return password
 
 
@@ -68,6 +63,8 @@ class UserOut(BaseModel):
     is_manager: bool
     is_active: bool
     profile_id: str | None
+    # True = precisa trocar a senha antes de usar o sistema (1º login)
+    must_change_password: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

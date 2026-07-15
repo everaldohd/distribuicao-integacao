@@ -36,7 +36,10 @@ def change_password(
     from app.core.security import verify_password
     if not verify_password(data.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Senha atual incorreta")
+    if data.new_password == data.current_password:
+        raise HTTPException(status_code=400, detail="A nova senha deve ser diferente da atual")
     current_user.hashed_password = hash_password(data.new_password)
+    current_user.must_change_password = False  # cumpriu a troca obrigatória
     db.commit()
     return {"message": "Senha alterada com sucesso"}
 
