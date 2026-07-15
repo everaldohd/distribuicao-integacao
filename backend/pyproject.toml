@@ -13,6 +13,16 @@ ignore = [
     "E501",  # comprimento de linha não é bloqueante (formatação fica a cargo do formatter)
 ]
 
+[tool.mypy]
+# Adoção gradual: começa permissivo (o step no CI é informativo).
+# Endurecer aos poucos: disallow_untyped_defs por módulo conforme for tipando.
+python_version = "3.12"
+ignore_missing_imports = true   # ortools, slowapi, emails não publicam stubs
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+exclude = ["alembic/"]
+
 [tool.ruff.lint.per-file-ignores]
 # Modelos usam forward references em string (Mapped["User"]) resolvidas pelo
 # SQLAlchemy em runtime — o ruff as vê como nomes indefinidos (falso positivo).

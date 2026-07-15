@@ -1,8 +1,8 @@
 import secrets
 import uuid
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.core.security import (
     clear_auth_cookies,
     create_access_token,
     hash_password,
+    revoke_token,
     set_auth_cookies,
     verify_password,
 )
@@ -41,8 +42,18 @@ def login(request: Request, response: Response, data: LoginRequest, db: Session 
 
 
 @router.post("/logout")
-def logout(response: Response):
-    """Encerra a sessão limpando os cookies (HttpOnly não pode ser apagado pelo JS)."""
+def logout(request: Request, response: Response):
+    """Encerra a sessão: revoga o token (denylist) e limpa os cookies.
+
+    Sem a revogação, o JWT continuaria válido até o `exp` mesmo após o logout.
+    """
+    token = request.cookies.get(settings.AUTH_COOKIE_NAME)
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header[7:]
+    if token:
+        revoke_token(token)
     clear_auth_cookies(response)
     return {"message": "Sessão encerrada"}
 
@@ -75,7 +86,7 @@ def sso_login(data: SSORequest, response: Response, db: Session = Depends(get_db
             algorithms=["HS256"],
             options={"require": ["exp"]},
         )
-    except JWTError as e:
+    except jwt.PyJWTError as e:
         raise HTTPException(status_code=401, detail=f"Token do NEO inválido ou expirado: {e}") from e
 
     matricula = str(claims.get("matricula") or "").strip()

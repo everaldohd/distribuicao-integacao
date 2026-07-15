@@ -72,6 +72,22 @@ def test_logout_clears_session(client, manager_user):
     assert client.get("/api/v1/users/me").status_code == 401
 
 
+def test_logout_revokes_token(client, manager_user):
+    """Após o logout, o MESMO token não pode mais ser usado (denylist por jti).
+
+    Sem revogação, um token vazado continuaria válido até o exp mesmo com logout.
+    """
+    login = client.post("/api/v1/auth/login", json={"email": "gestor@teste.com", "password": "senha123"})
+    token = login.json()["access_token"]
+    # Token funciona antes do logout
+    assert client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+    csrf = client.cookies.get("csrf_token")
+    client.post("/api/v1/auth/logout", headers={"X-CSRF-Token": csrf})
+    client.cookies.clear()
+    # O mesmo token, apresentado como Bearer, deve ser recusado
+    assert client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+
+
 def test_health(client):
     resp = client.get("/health")
     assert resp.status_code == 200

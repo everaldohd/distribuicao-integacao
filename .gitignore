@@ -53,6 +53,9 @@ frontend/.env.local
 .coverage
 htmlcov/
 .pytest_cache/
+frontend/coverage/
+.mypy_cache/
+.ruff_cache/
 
 # SQLite de teste
 *.db

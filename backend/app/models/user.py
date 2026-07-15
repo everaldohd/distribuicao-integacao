@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -21,8 +21,14 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # FK to Profile
-    profile_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # FK to Profile — SET NULL: excluir um perfil deixa o usuário "sem perfil"
+    # (estado válido e visível na UI), em vez de órfão apontando para id inexistente.
+    profile_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("profiles.id", ondelete="SET NULL", name="fk_users_profile_id_profiles"),
+        nullable=True,
+        index=True,
+    )
 
     # Relationships
     eligibilities: Mapped[list["Eligibility"]] = relationship("Eligibility", back_populates="user", cascade="all, delete-orphan")

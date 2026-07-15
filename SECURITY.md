@@ -12,7 +12,7 @@
 | Senhas | Mín. **8 caracteres** + **complexidade** (minúsc./maiúsc./dígito/símbolo) e máx. **72 bytes** (limite do bcrypt, checado em bytes) | `schemas/user.py` (`validate_password_strength`) |
 | Sessão | JWT em **cookie HttpOnly** (inacessível a JS → mitiga roubo por XSS); header Bearer ainda aceito p/ clientes de API | `core/security.py` (`set_auth_cookies`), `routers/deps.py`, `routers/auth.py` |
 | Sessão | **CSRF double-submit**: cookie `csrf_token` legível refletido no header `X-CSRF-Token`, conferido nos métodos que alteram estado | `main.py` (`csrf_protect`), `frontend/src/lib/api.ts` |
-| Sessão | `POST /auth/logout` limpa os cookies de sessão | `routers/auth.py` |
+| Sessão | `POST /auth/logout` limpa os cookies **e revoga o token** (denylist por `jti` no Redis, TTL = validade restante; fallback em memória p/ dev/testes) | `routers/auth.py`, `core/security.py`, `core/token_denylist.py` |
 | Login | **Rate limit** 10/min por IP (anti força-bruta) | `core/ratelimit.py`, `routers/auth.py`, `main.py` |
 | Login | Mensagem genérica (não revela se o usuário existe) + log de falha | `routers/auth.py` |
 | Autenticação | **JWT** (HS256), expira em 8h | `core/security.py`, `routers/deps.py` |

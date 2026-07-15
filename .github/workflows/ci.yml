@@ -20,16 +20,20 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: backend/requirements-dev.txt
 
       - name: Instalar dependências
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Ruff (lint)
         run: ruff check app
 
-      - name: Pytest
-        run: python -m pytest -q
+      - name: Mypy (type check)
+        continue-on-error: true  # informativo — adoção gradual; endurecer depois
+        run: mypy app
+
+      - name: Pytest (com cobertura)
+        run: python -m pytest -q --cov=app --cov-report=term-missing
 
       - name: Scan de dependências (pip-audit)
         continue-on-error: true  # informativo (não bloqueia o build do protótipo)
@@ -59,8 +63,8 @@ jobs:
       - name: ESLint
         run: npm run lint
 
-      - name: Testes (vitest)
-        run: npm test
+      - name: Testes (vitest, com cobertura)
+        run: npm run test:coverage
 
       - name: Build
         run: npm run build

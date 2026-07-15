@@ -1,36 +1,70 @@
 import secrets
 from datetime import UTC, datetime, timedelta
 
+import bcrypt
+import jwt
 from fastapi import Response
-from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from .config import settings
+from .token_denylist import denylist
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt direto (sem passlib): a lib é mantida ativamente e os hashes $2b$
+# gerados pelo passlib continuam verificáveis — migração transparente.
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except ValueError:
+        # hash malformado no banco → trata como credencial inválida
+        return False
 
 
 def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:
     expire = datetime.now(UTC) + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    return jwt.encode({"sub": subject, "exp": expire}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    payload = {
+        "sub": subject,
+        "exp": expire,
+        # jti: identifica o token individualmente → permite revogá-lo no logout
+        "jti": secrets.token_hex(16),
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def decode_token(token: str) -> str | None:
+    """Valida assinatura/expiração e recusa tokens revogados (logout)."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return payload.get("sub")
-    except JWTError:
+    except jwt.PyJWTError:
         return None
+    jti = payload.get("jti")
+    if jti and denylist.contains(jti):
+        return None
+    return payload.get("sub")
+
+
+def revoke_token(token: str) -> None:
+    """Revoga um token válido (logout): denylist pelo jti até o exp original.
+
+    Tokens inválidos/expirados são ignorados em silêncio — não há o que revogar.
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except jwt.PyJWTError:
+        return
+    jti = payload.get("jti")
+    exp = payload.get("exp")
+    if not jti or not exp:
+        return  # token antigo (sem jti) — expira naturalmente pelo exp
+    ttl = int(exp - datetime.now(UTC).timestamp())
+    if ttl > 0:
+        denylist.add(jti, ttl)
 
 
 def set_auth_cookies(response: Response, token: str) -> str:
