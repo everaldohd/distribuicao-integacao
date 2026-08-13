@@ -38,7 +38,12 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    // 401 num endpoint de autenticação = credencial errada (o próprio login/SSO
+    // trata e exibe o erro). Só redirecionamos em 401 de OUTRAS rotas — aí sim é
+    // "sessão expirada". Sem isso, o reload apagava a mensagem de erro do login (a "piscada").
+    const url: string = err.config?.url || ''
+    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/sso')
+    if (err.response?.status === 401 && !isAuthEndpoint) {
       window.location.href = '/login'
     }
     return Promise.reject(err)
