@@ -4,7 +4,90 @@ import { api } from '../../lib/api'
 import { getMe } from '../../lib/auth'
 import type { PreferenceType, PreferenceOptions, Schedule } from '../../lib/types'
 import { Card, CardBody } from '../../components/ui/Card'
+import { Button } from '../../components/ui/Button'
 import { getDay } from 'date-fns'
+
+interface Afastamento {
+  id: string
+  start_date: string
+  end_date: string
+  notes: string | null
+  self_requested: boolean
+}
+
+const brDate = (d: string) => d.split('-').reverse().join('/')
+
+// Seção de afastamento (regulamentar/legal) autolançado pelo perito — vale de
+// imediato; o gestor pode revisar/cancelar depois.
+function AfastamentoSection() {
+  const qc = useQueryClient()
+  const [start, setStart] = useState('')
+  const [end, setEnd] = useState('')
+  const [notes, setNotes] = useState('')
+  const [err, setErr] = useState('')
+
+  const { data: list = [] } = useQuery<Afastamento[]>({
+    queryKey: ['my-afastamentos'],
+    queryFn: () => api.get('/unavailabilities/me').then((r) => r.data),
+  })
+
+  const create = useMutation({
+    mutationFn: () => api.post('/unavailabilities', { start_date: start, end_date: end, notes: notes || null }),
+    onSuccess: () => { setStart(''); setEnd(''); setNotes(''); setErr(''); qc.invalidateQueries({ queryKey: ['my-afastamentos'] }) },
+    onError: (e: any) => setErr(e?.response?.data?.detail ?? 'Não foi possível solicitar.'),
+  })
+  const cancel = useMutation({
+    mutationFn: (id: string) => api.delete(`/unavailabilities/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-afastamentos'] }),
+  })
+
+  const canSubmit = !!start && !!end && end >= start
+
+  return (
+    <Card><CardBody className="space-y-4">
+      <div>
+        <p className="font-semibold text-gray-800">Afastamento (regulamentar/legal)</p>
+        <p className="text-sm text-gray-500">
+          Lance seu afastamento — ele já vale de imediato. O gestor pode revisar e cancelar; se não fizer nada, permanece.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-sm text-gray-600">De
+          <input type="date" value={start} onChange={(e) => setStart(e.target.value)}
+            className="mt-1 block border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        </label>
+        <label className="text-sm text-gray-600">Até
+          <input type="date" value={end} onChange={(e) => setEnd(e.target.value)}
+            className="mt-1 block border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        </label>
+        <label className="text-sm text-gray-600 flex-1 min-w-[180px]">Observação (opcional)
+          <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="ex.: licença médica"
+            className="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        </label>
+        <Button size="sm" loading={create.isPending} disabled={!canSubmit} onClick={() => create.mutate()}>Solicitar</Button>
+      </div>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+
+      {list.length > 0 && (
+        <div className="divide-y divide-gray-100 border-t border-gray-100 pt-1">
+          {list.map((a) => (
+            <div key={a.id} className="flex items-center justify-between py-2 text-sm">
+              <div className="text-gray-700">
+                <span className="font-medium">{brDate(a.start_date)} → {brDate(a.end_date)}</span>
+                {a.notes && <span className="text-gray-500"> · {a.notes}</span>}
+                <span className="ml-2 text-xs text-gray-400">{a.self_requested ? 'lançado por você' : 'lançado pela gestão'}</span>
+              </div>
+              {a.self_requested && (
+                <button onClick={() => cancel.mutate(a.id)} className="text-xs text-red-600 hover:underline">Cancelar</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </CardBody></Card>
+  )
+}
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const WEEKDAYS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
@@ -270,6 +353,9 @@ export function MinhaAgendaPage() {
           </CardBody></Card>
         </>
       )}
+
+      {/* Afastamento autolançado (sempre visível) */}
+      <AfastamentoSection />
     </div>
   )
 }

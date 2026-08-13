@@ -17,6 +17,7 @@ import { MinhaAgendaPage } from './pages/usuario/MinhaAgendaPage'
 import { TrocasPage } from './pages/usuario/TrocasPage'
 import { EscalaPublicaPage } from './pages/EscalaPublicaPage'
 import { AprovarTrocasPage } from './pages/gestor/AprovarTrocasPage'
+import { AfastamentosPage } from './pages/gestor/AfastamentosPage'
 import { SaldoPage } from './pages/usuario/SaldoPage'
 import { isAuthenticated } from './lib/auth'
 
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/gestor/escalas/:id" element={<EscalaDetalhePage />} />
         <Route path="/gestor/saldo" element={<SaldoGestorPage />} />
         <Route path="/gestor/aprovar-trocas" element={<AprovarTrocasPage />} />
+        <Route path="/gestor/afastamentos" element={<AfastamentosPage />} />
         <Route path="/gestor/escala-geral" element={<EscalaPublicaPage />} />
         <Route path="/gestor/auditoria" element={<AuditoriaPage />} />
 

@@ -22,6 +22,7 @@ from app.routers import (
     profiles,
     schedule_types,
     schedules,
+    unavailabilities,
     users,
 )
 
@@ -118,6 +119,7 @@ async def log_requests(request: Request, call_next):
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
+app.include_router(unavailabilities.router, prefix="/api/v1")
 app.include_router(schedule_types.router, prefix="/api/v1")
 app.include_router(calendars.router, prefix="/api/v1")
 app.include_router(schedules.router, prefix="/api/v1")

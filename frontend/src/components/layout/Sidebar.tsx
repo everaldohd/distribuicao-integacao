@@ -17,6 +17,7 @@ const managerLinks: Link[] = [
   { to: '/gestor/calendarios', label: 'Calendários' },
   { to: '/gestor/escalas', label: 'Escalas' },
   { to: '/gestor/aprovar-trocas', label: 'Aprovar Trocas' },
+  { to: '/gestor/afastamentos', label: 'Afastamentos' },
   { to: '/gestor/saldo', label: 'Saldo / Ranking' },
   { to: '/gestor/auditoria', label: 'Auditoria' },
 ]
